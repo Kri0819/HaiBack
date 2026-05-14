@@ -1,9 +1,11 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import tailwindcss from '@tailwindcss/vite' // 1. 補上這個導入
 import { VitePWA } from 'vite-plugin-pwa'
 
 export default defineConfig({
   plugins: [
+    tailwindcss(), // 2. 把 tailwindcss() 放進插件列表
     react(),
     VitePWA({
       registerType: 'autoUpdate',       // 自動更新 SW，不需要使用者手動重整
