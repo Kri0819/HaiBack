@@ -232,21 +232,32 @@ function Input({ d, ...props }) {
 }
 function Textarea({ d, ...props }) {
   return (
-    <textarea {...props}
-      className={`w-full px-4 py-3 rounded-2xl border text-sm focus:outline-none focus:ring-2 focus:ring-black/10 transition-all resize-none ${C.input(d)} ${props.className || ""}`} />
+    <textarea 
+      {...props}
+      className={`w-full px-4 py-3 rounded-2xl border text-sm focus:outline-none focus:ring-2 focus:ring-black/10 transition-all resize-none ${C.input(d)} ${props.className || ""}`} 
+    />
   );
 }
+
 function DateInput({ value, onChange, d }) {
   const ref = useRef();
   return (
-    <div className={`flex items-center gap-3 px-4 py-3 rounded-2xl border cursor-pointer transition-all ${C.input(d)}`}
-      onClick={() => ref.current?.showPicker?.()}>
+    <div 
+      className={`flex items-center gap-3 px-4 py-3 rounded-2xl border cursor-pointer transition-all ${C.input(d)}`}
+      onClick={() => ref.current?.showPicker?.()}
+    >
       <span className={C.tx3(d)}>{I.cal}</span>
-      <input ref={ref} type="date" value={value} onChange={e => onChange(e.target.value)}
-  );
-        className={`flex-1 text-sm font-medium bg-transparent focus:outline-none cursor-pointer ${C.tx(d)}`} />
+      <input 
+        ref={ref} 
+        type="date" 
+        value={value} 
+        onChange={e => onChange(e.target.value)}
+        className={`flex-1 text-sm font-medium bg-transparent focus:outline-none cursor-pointer ${C.tx(d)}`} 
+      /> {/* ✨ 修正 1：把屬性放回標籤內，並正確閉合 input */}
     </div>
+  ); // ✨ 修正 2：補齊正確的 return 圓括號與分號
 }
+
 function Sheet({ title, onClose, d, children }) {
   return (
     <div className="fixed inset-0 z-50 flex items-end">
@@ -254,7 +265,12 @@ function Sheet({ title, onClose, d, children }) {
       <div className={`relative w-full rounded-t-3xl shadow-2xl max-h-[93vh] flex flex-col ${C.sheetBg(d)}`}>
         <div className={`flex items-center justify-between px-5 pt-5 pb-4 border-b ${C.border(d)} shrink-0`}>
           <h2 className={`text-base font-bold ${C.tx(d)}`}>{title}</h2>
-          <button onClick={onClose} className={`w-8 h-8 flex items-center justify-center rounded-full text-xl transition-colors ${C.closeBtn(d)}`}>
+          <button 
+            onClick={onClose} 
+            className={`w-8 h-8 flex items-center justify-center rounded-full text-xl transition-colors ${C.closeBtn(d)}`}
+          >
+            × {/* ✨ 修正 3：幫關閉按鈕補上 X 字元與結束標籤 </button> */}
+          </button> 
         </div>
         <div className="overflow-y-auto flex-1 px-5 py-5 pb-12">{children}</div>
       </div>
