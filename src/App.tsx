@@ -111,20 +111,56 @@ const derive = (raw) => {
   const pr   = raw.paymentRecords ?? [];
   const paid = pr.reduce((s, r) => s + toN(r.amount), 0);
   const isR  = raw.kind === KIND.R || raw.advStatus === ADV.REJECTED;
+  
   if (isR) {
     const rem = clamp(toN(raw.amount) - paid);
-    return { ...raw, pr, paid, effectiveKind: KIND.R, remaining: rem, absDiff: 0, iOwe: false, diff: 0, status: rem === 0 ? "
+    return { 
+      ...raw, 
+      pr, 
+      paid, 
+      effectiveKind: KIND.R, 
+      remaining: rem, 
+      absDiff: 0, 
+      iOwe: false, 
+      diff: 0, 
+      status: rem === 0 ? "已結清" : "未結清" // ✨ 修正 1：補齊字串與括號
+    };
   }
+  
   if (raw.advStatus === ADV.PENDING) {
-    return { ...raw, pr, paid, effectiveKind: KIND.A, stage: null, remaining: 0, absDiff: 0, iOwe: false, diff: 0, status: "
+    return { 
+      ...raw, 
+      pr, 
+      paid, 
+      effectiveKind: KIND.A, 
+      stage: null, 
+      remaining: 0, 
+      absDiff: 0, 
+      iOwe: false, 
+      diff: 0, 
+      status: "審核中" // ✨ 修正 2：補齊字串與括號
+    };
   }
-  const stage  = computeStage(raw);
+  
+  const stage   = computeStage(raw);
   const advRec = toN(raw.advanceReceived);
   const diff   = advRec - toN(raw.actualSpent);
   const absDiff= Math.abs(diff);
   const iOwe   = advRec > 0 && diff > 0;
   const rem    = clamp(absDiff - paid);
-  return { ...raw, pr, paid, effectiveKind: KIND.A, stage, diff, absDiff, iOwe, remaining: stage === STAGE.DONE ? 0 : rem, status: stage === STAGE.DONE ? "
+  
+  return { 
+    ...raw, 
+    pr, 
+    paid, 
+    effectiveKind: KIND.A, 
+    stage, 
+    diff, 
+    absDiff, 
+    iOwe, 
+    remaining: stage === STAGE.DONE ? 0 : rem, 
+    status: stage === STAGE.DONE ? "已完成" : "處理中" // ✨ 修正 3：補齊字串與括號
+  };
 };
 const strip = (r) => ({
   id: r.id, userId: r.userId ?? null, kind: r.kind, advStatus: r.advStatus ?? null,
