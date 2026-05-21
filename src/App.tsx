@@ -10,6 +10,9 @@
  */
 import { useState, useMemo, useCallback, createContext, useContext, useEffect, useRef } from "react";
 import { createClient } from "@supabase/supabase-js";
+import { KIND, ADV, STAGE } from "./domain/constants.js";
+import { uid, today, toN, clamp, strip, buildRaw } from "./domain/records.js";
+import { derive } from "./domain/derive.js";
 
 // ── PASTE YOUR SUPABASE CREDENTIALS HERE ─────────────────────
 const SUPABASE_URL  = import.meta.env.VITE_SUPABASE_URL  || "https://YOUR_PROJECT.supabase.co";
@@ -165,63 +168,9 @@ const C = {
   sheetBg: (d) => d ? "bg-zinc-900 border-t border-zinc-800" : "bg-white",
 };
 
-// ─── Domain constants ─────────────────────────────────────────
-const KIND  = { R: "reimburse", A: "advance" };
-const ADV   = { PENDING: "pending", REJECTED: "rejected", APPROVED: "approved" };
-const STAGE = { WAITING: "waiting", SETTLING: "settling", DONE: "done" };
-
-const uid   = () => Math.random().toString(36).slice(2, 9) + Date.now().toString(36);
-const fmt   = (n) => `$${Number(n || 0).toLocaleString()}`;
-const today = () => new Date().toISOString().slice(0, 10);
-const fmtD  = (s) => (s || "").slice(0, 10).replace(/-/g, "/");
-const toN   = (v) => Number(v) || 0;
-const clamp = (n) => Math.max(n, 0);
-
-const computeStage = (raw) => {
-  if (!toN(raw.actualSpent)) return STAGE.WAITING;
-  const advRec = toN(raw.advanceReceived);
-  const diff   = advRec - toN(raw.actualSpent);
-  const iOwe   = advRec > 0 && diff > 0;
-  const paid   = (raw.paymentRecords || []).reduce((s, r) => s + toN(r.amount), 0);
-  return (Math.abs(diff) === 0 || !iOwe || paid >= Math.abs(diff)) ? STAGE.DONE : STAGE.SETTLING;
-};
-
-const derive = (raw) => {
-  const pr   = raw.paymentRecords ?? [];
-  const paid = pr.reduce((s, r) => s + toN(r.amount), 0);
-  const isR  = raw.kind === KIND.R || raw.advStatus === ADV.REJECTED;
-
-  if (isR) {
-    const rem = clamp(toN(raw.amount) - paid);
-    return { ...raw, pr, paid, effectiveKind: KIND.R, remaining: rem, absDiff: 0, iOwe: false, diff: 0, status: rem === 0 ? "完成" : "處理中" };
-  }
-  if (raw.advStatus === ADV.PENDING) {
-    return { ...raw, pr, paid, effectiveKind: KIND.A, stage: null, remaining: 0, absDiff: 0, iOwe: false, diff: 0, status: "等待核准" };
-  }
-  const stage  = computeStage(raw);
-  const advRec = toN(raw.advanceReceived);
-  const diff   = advRec - toN(raw.actualSpent);
-  const absDiff= Math.abs(diff);
-  const iOwe   = advRec > 0 && diff > 0;
-  const rem    = clamp(absDiff - paid);
-  return { ...raw, pr, paid, effectiveKind: KIND.A, stage, diff, absDiff, iOwe, remaining: stage === STAGE.DONE ? 0 : rem, status: stage === STAGE.DONE ? "完成" : "處理中" };
-};
-
-const strip = (r) => ({
-  id: r.id, userId: r.userId ?? null, kind: r.kind, advStatus: r.advStatus ?? null,
-  title: r.title, date: r.date, note: r.note || "",
-  amount: toN(r.amount), advanceReceived: toN(r.advanceReceived),
-  actualSpent: toN(r.actualSpent), settlementDate: r.settlementDate || "",
-  paymentRecords: r.paymentRecords || [],
-});
-
-const buildRaw = (f, uid2 = null) => ({
-  id: f.id || uid(), userId: f.userId ?? uid2, kind: f.kind || KIND.R,
-  advStatus: f.advStatus ?? null, title: f.title || "", date: f.date || today(),
-  note: f.note || "", amount: toN(f.amount), advanceReceived: toN(f.advanceReceived),
-  actualSpent: toN(f.actualSpent), settlementDate: f.settlementDate || "",
-  paymentRecords: f.paymentRecords || [],
-});
+// ─── UI formatting helpers ────────────────────────────────────
+const fmt  = (n) => `$${Number(n || 0).toLocaleString()}`;
+const fmtD = (s) => (s || "").slice(0, 10).replace(/-/g, "/");
 
 // ─── Icons ────────────────────────────────────────────────────
 const sv = (d, c = "w-4 h-4") =>
