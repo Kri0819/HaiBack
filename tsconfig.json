@@ -19,6 +19,6 @@
     "noUnusedLocals": false,
     "noUnusedParameters": false
   },
-  "include": ["src"]
+  "include": ["src", "storage_v1.js", "recordsReducer_v1.js"]
 }
 

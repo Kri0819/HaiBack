@@ -13,20 +13,17 @@ import { createClient } from "@supabase/supabase-js";
 import { KIND, ADV, STAGE } from "./domain/constants.js";
 import { uid, today, toN, clamp, strip, buildRaw } from "./domain/records.js";
 import { derive } from "./domain/derive.js";
+import { recordsReducer, RECORDS_ACTION } from "../recordsReducer_v1.js/index.js";
+import {
+  getTheme, saveTheme,
+  getGuestDismissed, setGuestDismissed,
+} from "../storage_v1.js/index.js";
 
 // ── PASTE YOUR SUPABASE CREDENTIALS HERE ─────────────────────
 const SUPABASE_URL  = import.meta.env.VITE_SUPABASE_URL  || "https://YOUR_PROJECT.supabase.co";
 const SUPABASE_ANON = import.meta.env.VITE_SUPABASE_ANON_KEY || "YOUR_ANON_KEY";
 const sb = createClient(SUPABASE_URL, SUPABASE_ANON);
 // ─────────────────────────────────────────────────────────────
-
-// ── Local prefs (theme + guest dismiss — OK to stay local) ───
-const ls = {
-  get: (k, fb = null) => { try { const v = localStorage.getItem(k); return v === null ? fb : JSON.parse(v); } catch { return fb; } },
-  set: (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
-};
-
-const PREF = { THEME: "hb_theme", GUEST_OK: "hb_guest_ok" };
 
 // ── Supabase auth helpers (Magic Link / Email OTP) ───────────
 const auth = {
@@ -128,11 +125,11 @@ const ThemeCtx = createContext({ dark: false, pref: "light", setPref: () => {} }
 const useTheme = () => useContext(ThemeCtx);
 
 function ThemeProvider({ children }) {
-  const [pref, _setPref] = useState(() => ls.get(PREF.THEME, "light"));
+  const [pref, _setPref] = useState(() => getTheme());
   const sysDark = typeof window !== "undefined" && window.matchMedia("(prefers-color-scheme: dark)").matches;
   const dark = pref === "dark" || (pref === "system" && sysDark);
 
-  const setPref = useCallback((t) => { _setPref(t); ls.set(PREF.THEME, t); }, []);
+  const setPref = useCallback((t) => { _setPref(t); saveTheme(t); }, []);
 
   useEffect(() => {
     document.body.style.background = dark ? "#09090b" : "#f9fafb";
@@ -924,17 +921,17 @@ function DetailPage({ recId, records, dispatch, onBack, user, d }) {
         )}
       </div>
 
-      {sheet === "edit" && <RecordSheet d={d} initial={rec} user={user} onSave={f => { dispatch({ type: "UPDATE", payload: derive({ ...strip(rec), ...strip(buildRaw(f, user?.id)) }) }); setSheet(null); }} onClose={() => setSheet(null)} />}
-      {sheet === "status" && <AdvStatusSheet d={d} rec={rec} onSave={u => { dispatch({ type: "UPDATE", payload: derive({ ...strip(rec), ...u }) }); setSheet(null); }} onClose={() => setSheet(null)} />}
-      {sheet === "settle" && <SettleSheet d={d} rec={rec} onSave={({ actualSpent, settlementDate }) => { dispatch({ type: "UPDATE", payload: derive({ ...strip(rec), actualSpent, settlementDate }) }); setSheet(null); }} onClose={() => setSheet(null)} />}
-      {sheet === "pay" && rec.remaining > 0 && <PaymentSheet d={d} rec={rec} onSave={p => { dispatch({ type: "UPDATE", payload: derive({ ...strip(rec), paymentRecords: [...rec.pr, p] }) }); setSheet(null); }} onClose={() => setSheet(null)} />}
+      {sheet === "edit" && <RecordSheet d={d} initial={rec} user={user} onSave={f => { dispatch({ type: RECORDS_ACTION.UPDATE_RECORD, payload: derive({ ...strip(rec), ...strip(buildRaw(f, user?.id)) }) }); setSheet(null); }} onClose={() => setSheet(null)} />}
+      {sheet === "status" && <AdvStatusSheet d={d} rec={rec} onSave={u => { dispatch({ type: RECORDS_ACTION.UPDATE_RECORD, payload: derive({ ...strip(rec), ...u }) }); setSheet(null); }} onClose={() => setSheet(null)} />}
+      {sheet === "settle" && <SettleSheet d={d} rec={rec} onSave={({ actualSpent, settlementDate }) => { dispatch({ type: RECORDS_ACTION.UPDATE_RECORD, payload: derive({ ...strip(rec), actualSpent, settlementDate }) }); setSheet(null); }} onClose={() => setSheet(null)} />}
+      {sheet === "pay" && rec.remaining > 0 && <PaymentSheet d={d} rec={rec} onSave={p => { dispatch({ type: RECORDS_ACTION.UPDATE_RECORD, payload: derive({ ...strip(rec), paymentRecords: [...rec.pr, p] }) }); setSheet(null); }} onClose={() => setSheet(null)} />}
       {sheet === "del" && (
         <Sheet title="清掉這筆" onClose={() => setSheet(null)} d={d}>
           <div className="flex flex-col gap-5">
             <p className={`text-sm ${C.tx2(d)}`}>確定要清掉「<strong>{rec.title}</strong>」嗎？無法復原。</p>
             <div className="flex gap-3">
               <GBtn d={d} onClick={() => setSheet(null)}>取消</GBtn>
-              <button onClick={() => dispatch({ type: "DELETE", payload: rec.id })}
+              <button onClick={() => dispatch({ type: RECORDS_ACTION.DELETE_RECORD, payload: rec.id })}
                 className="flex-1 py-4 rounded-2xl bg-red-500 text-white text-sm font-bold hover:bg-red-600 transition-colors">清掉</button>
             </div>
           </div>
@@ -947,10 +944,10 @@ function DetailPage({ recId, records, dispatch, onBack, user, d }) {
 // ─── Main App ─────────────────────────────────────────────────
 function MainApp() {
   const { dark: d } = useTheme();
-  const [records,    setRecords]    = useState([]);
+  const [records,    dispatchRecords] = useReducer(recordsReducer, []);
   const [user,       setUser]       = useState(null);
-  const [authReady,  setAuthReady]  = useState(false);   // waiting for session check
-  const [loadingRec, setLoadingRec] = useState(false);   // fetching records
+  const [authReady,  setAuthReady]  = useState(false);
+  const [loadingRec, setLoadingRec] = useState(false);
   const [selId,      setSelId]      = useState(null);
   const [sheet,      setSheet]      = useState(null);
   const [quickId,    setQuickId]    = useState(null);
@@ -958,7 +955,7 @@ function MainApp() {
   const [fStatus,    setFStatus]    = useState("全部");
   const [fKind,      setFKind]      = useState("全部");
   const [sort,       setSort]       = useState("date_desc");
-  const [guestOk,    setGuestOk]    = useState(() => ls.get(PREF.GUEST_OK, false));
+  const [guestOk,    setGuestOk]    = useState(() => getGuestDismissed());
 
   // ── Auth: listen for session changes ──────────────────────
   useEffect(() => {
@@ -970,7 +967,7 @@ function MainApp() {
     // Subscribe to login/logout events
     const sub = auth.onAuthChange((u) => {
       setUser(u);
-      if (!u) setRecords([]);   // clear records on logout
+      if (!u) dispatchRecords({ type: RECORDS_ACTION.LOAD_RECORDS, payload: [] });
     });
     return () => sub.unsubscribe();
   }, []);
@@ -980,28 +977,28 @@ function MainApp() {
     if (!user) return;
     setLoadingRec(true);
     db.load().then((raws) => {
-      setRecords(raws.map(derive));
+      dispatchRecords({
+        type: RECORDS_ACTION.LOAD_RECORDS,
+        payload: raws.map(derive),
+      });
       setLoadingRec(false);
     });
   }, [user?.id]);
 
-  // ── Dispatch (optimistic local + async cloud) ─────────────
+  // ── dispatch — pure state update via reducer, side-effects here ──
   const dispatch = useCallback((action) => {
-    setRecords(prev => {
-      let next;
-      if (action.type === "ADD") {
-        next = [action.payload, ...prev];
-        db.upsert(strip(action.payload));
-      } else if (action.type === "UPDATE") {
-        next = prev.map(r => r.id === action.payload.id ? action.payload : r);
-        db.upsert(strip(action.payload));
-      } else if (action.type === "DELETE") {
-        next = prev.filter(r => r.id !== action.payload);
-        setSelId(null);
-        db.delete(action.payload);
-      } else next = prev;
-      return next;
-    });
+    // 1. Update local state via pure reducer
+    dispatchRecords(action);
+
+    // 2. Side-effects (DB sync) — outside reducer, caller's responsibility
+    if (action.type === RECORDS_ACTION.ADD_RECORD) {
+      db.upsert(strip(action.payload));
+    } else if (action.type === RECORDS_ACTION.UPDATE_RECORD) {
+      db.upsert(strip(action.payload));
+    } else if (action.type === RECORDS_ACTION.DELETE_RECORD) {
+      setSelId(null);
+      db.delete(action.payload);
+    }
   }, []);
 
   const login  = (u) => { setUser(u); setSheet(null); };
@@ -1139,7 +1136,7 @@ function MainApp() {
                 訪客模式，資料僅存在此裝置。
                 <button onClick={() => setSheet("login")} className={`ml-1 underline underline-offset-2 font-semibold ${C.tx(d)}`}>登入帳號</button>可跨裝置同步。
               </p>
-              <button onClick={() => { ls.set(PREF.GUEST_OK, true); setGuestOk(true); }} className={`text-xs ${C.tx3(d)} hover:opacity-60 shrink-0 mt-0.5`}>✕</button>
+              <button onClick={() => { setGuestDismissed(); setGuestOk(true); }} className={`text-xs ${C.tx3(d)} hover:opacity-60 shrink-0 mt-0.5`}>✕</button>
             </div>
           )}
         </div>
@@ -1178,12 +1175,12 @@ function MainApp() {
       </button>
 
       {/* Sheets */}
-      {sheet === "add"     && <RecordSheet d={d} user={user} onSave={f => { dispatch({ type: "ADD", payload: derive(buildRaw(f, user?.id)) }); setSheet(null); }} onClose={() => setSheet(null)} />}
+      {sheet === "add"     && <RecordSheet d={d} user={user} onSave={f => { dispatch({ type: RECORDS_ACTION.ADD_RECORD, payload: derive(buildRaw(f, user?.id)) }); setSheet(null); }} onClose={() => setSheet(null)} />}
       {sheet === "login"   && <LoginSheet  d={d} onClose={() => setSheet(null)} />}
       {sheet === "account" && <AccountSheet d={d} user={user} onLogout={logout} onClose={() => setSheet(null)} />}
-      {quickRec && quickType === "status" && <AdvStatusSheet d={d} rec={quickRec} onSave={u => { dispatch({ type: "UPDATE", payload: derive({ ...strip(quickRec), ...u }) }); setQuickId(null); }} onClose={() => setQuickId(null)} />}
-      {quickRec && quickType === "settle" && <SettleSheet d={d} rec={quickRec} onSave={({ actualSpent, settlementDate }) => { dispatch({ type: "UPDATE", payload: derive({ ...strip(quickRec), actualSpent, settlementDate }) }); setQuickId(null); }} onClose={() => setQuickId(null)} />}
-      {quickRec && quickType === "pay"    && <PaymentSheet d={d} rec={quickRec} onSave={p => { dispatch({ type: "UPDATE", payload: derive({ ...strip(quickRec), paymentRecords: [...quickRec.pr, p] }) }); setQuickId(null); }} onClose={() => setQuickId(null)} />}
+      {quickRec && quickType === "status" && <AdvStatusSheet d={d} rec={quickRec} onSave={u => { dispatch({ type: RECORDS_ACTION.UPDATE_RECORD, payload: derive({ ...strip(quickRec), ...u }) }); setQuickId(null); }} onClose={() => setQuickId(null)} />}
+      {quickRec && quickType === "settle" && <SettleSheet d={d} rec={quickRec} onSave={({ actualSpent, settlementDate }) => { dispatch({ type: RECORDS_ACTION.UPDATE_RECORD, payload: derive({ ...strip(quickRec), actualSpent, settlementDate }) }); setQuickId(null); }} onClose={() => setQuickId(null)} />}
+      {quickRec && quickType === "pay"    && <PaymentSheet d={d} rec={quickRec} onSave={p => { dispatch({ type: RECORDS_ACTION.UPDATE_RECORD, payload: derive({ ...strip(quickRec), paymentRecords: [...quickRec.pr, p] }) }); setQuickId(null); }} onClose={() => setQuickId(null)} />}
     </div>
   );
 }
