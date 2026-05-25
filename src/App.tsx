@@ -8,13 +8,30 @@
  * 4. npm install @supabase/supabase-js
  * ─────────────────────────────────────────────────────────────
  */
-import { useState, useMemo, useCallback, createContext, useContext, useEffect, useRef } from "react";
+import {
+  useState,
+  useMemo,
+  useCallback,
+  createContext,
+  useContext,
+  useEffect,
+  useRef,
+  useReducer
+} from "react";
+
 import { createClient } from "@supabase/supabase-js";
+
 import { KIND, ADV, STAGE } from "./domain/constants.js";
 import { uid, today, toN, clamp, strip, buildRaw } from "./domain/records.js";
 import { derive } from "./domain/derive.js";
 import { recordsReducer, RECORDS_ACTION } from "./store/recordsReducer_v1.js";
-import { getTheme, saveTheme, getGuestDismissed, setGuestDismissed } from "./services/storage_v1.js";
+
+import {
+  getTheme,
+  saveTheme,
+  getGuestDismissed,
+  setGuestDismissed
+} from "./services/storage_v1.js";
 
 // ── PASTE YOUR SUPABASE CREDENTIALS HERE ─────────────────────
 const SUPABASE_URL  = import.meta.env.VITE_SUPABASE_URL  || "https://YOUR_PROJECT.supabase.co";
