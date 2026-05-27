@@ -385,7 +385,6 @@ function AccountSheet({ user, onLogout, onClose, d }) {
   const opts = [
     { k: "light",  l: "淺色模式", ic: I.sun   },
     { k: "dark",   l: "深色模式", ic: I.moon  },
-    { k: "system", l: "跟隨系統", ic: I.phone },
   ];
   return (
     <Sheet title="設定" onClose={onClose} d={d}>
