@@ -418,29 +418,28 @@ function AccountSheet({ user, onLogout, onClose, d }) {
   );
 }
 
-// ─── Login Sheet (Magic Link) ─────────────────────────────────
 function LoginSheet({ onClose, d }) {
-  const [email,  setEmail]  = useState("");
-  const [sent,   setSent]   = useState(false);
-  const [err,    setErr]    = useState("");
-  const [busy,   setBusy]   = useState(false);
 
-  const send = async () => {
-    const e = email.trim().toLowerCase();
-    if (!e || !e.includes("@")) return setErr("請輸入有效的 Email");
-    setErr(""); setBusy(true);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+
+  const login = async () => {
+    setErr("");
+    setBusy(true);
+
     try {
-      await auth.sendMagicLink(e);
-      setSent(true);
-    } catch (ex) { setErr(ex.message); }
+      await auth.loginWithGoogle();
+    } catch (ex) {
+      setErr(ex.message);
+    }
+
     setBusy(false);
   };
 
-  const onKey = (e) => { if (e.key === "Enter") send(); };
-
   return (
     <Sheet title="登入 HaiBack" onClose={onClose} d={d}>
-      <div className="flex flex-col gap-5">
+      <div className="flex flex-col gap-6">
+
         {/* Brand */}
         <div className="flex items-center gap-3 pb-1">
           <div className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 ${d ? "bg-zinc-100" : "bg-zinc-900"}`}>
@@ -448,52 +447,32 @@ function LoginSheet({ onClose, d }) {
           </div>
           <div>
             <div className={`font-bold ${C.tx(d)}`}>HaiBack｜還袂</div>
-            <div className={`text-xs ${C.tx3(d)}`}>記帳不是麻煩，只是還沒被整理好。</div>
+            <div className={`text-xs ${C.tx3(d)}`}>用 Google 一鍵登入</div>
           </div>
         </div>
 
-        {!sent ? (
-          <>
-            <Field label="Email" d={d}>
-              <Input d={d} type="email" placeholder="you@example.com"
-                autoComplete="email" value={email}
-                onChange={e => setEmail(e.target.value)}
-                onKeyDown={onKey} />
-            </Field>
-
-            {err && (
-              <div className={`text-sm rounded-2xl px-4 py-3 ${d ? "bg-red-900/30 text-red-300" : "bg-red-50 text-red-600"}`}>
-                {err}
-              </div>
-            )}
-
-            <PBtn d={d} onClick={send} disabled={busy}>
-              {busy ? "寄送中…" : "寄送登入連結"}
-            </PBtn>
-
-            <p className={`text-xs text-center leading-relaxed ${C.tx3(d)}`}>
-              輸入 Email 後，我們會寄一封登入連結給你。<br/>
-              點擊連結即可登入，無需密碼。<br/>
-              第一次登入會自動建立帳號。
-            </p>
-          </>
-        ) : (
-          <div className="flex flex-col items-center gap-4 py-4 text-center">
-            <div className="text-5xl">📬</div>
-            <div className={`font-bold text-lg ${C.tx(d)}`}>連結已寄出！</div>
-            <div className={`text-sm leading-relaxed ${C.tx2(d)}`}>
-              請查看 <strong>{email}</strong> 的收件匣，<br/>
-              點擊信中的連結即可登入。
-            </div>
-            <p className={`text-xs ${C.tx3(d)}`}>
-              沒收到？請檢查垃圾郵件，或
-            </p>
-            <button onClick={() => { setSent(false); setEmail(""); }}
-              className={`text-xs underline underline-offset-2 ${C.tx2(d)} hover:opacity-70`}>
-              重新輸入 Email
-            </button>
+        {/* Error */}
+        {err && (
+          <div className={`text-sm rounded-2xl px-4 py-3 ${d ? "bg-red-900/30 text-red-300" : "bg-red-50 text-red-600"}`}>
+            {err}
           </div>
         )}
+
+        {/* Google Button */}
+        <button
+          onClick={login}
+          disabled={busy}
+          className={`rounded-2xl px-4 py-3 font-medium transition ${
+            d ? "bg-white text-black" : "bg-black text-white"
+          }`}
+        >
+          {busy ? "跳轉中…" : "Continue with Google"}
+        </button>
+
+        <p className={`text-xs text-center leading-relaxed ${C.tx3(d)}`}>
+          使用 Google 帳號登入，不需要密碼、不需要信箱驗證連結。
+        </p>
+
       </div>
     </Sheet>
   );
