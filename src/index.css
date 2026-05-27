@@ -1,1 +1,9 @@
 @import "tailwindcss";
+
+body {
+  /* 自動保留 iPhone 頂部劉海、動態島的安全距離 */
+  padding-top: env(safe-area-inset-top);
+  
+  /* 如果你希望左右兩邊也留出安全距離（防橫螢幕切到），可以改用下面這行（二選一） */
+  /* padding: env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left); */
+}
