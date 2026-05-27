@@ -8,7 +8,7 @@
  * 4. npm install @supabase/supabase-js
  * ─────────────────────────────────────────────────────────────
  */
-import { useState, useMemo, useCallback, createContext, useContext, useEffect, useRef } from "react";
+import { useState, useReducer, useMemo, useCallback, createContext, useContext, useEffect, useRef } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { KIND, ADV, STAGE } from "./domain/constants.js";
 import { uid, today, toN, clamp, strip, buildRaw } from "./domain/records.js";

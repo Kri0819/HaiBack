@@ -4,6 +4,7 @@ import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
 
 export default defineConfig({
+  base: './', // 👈 加上這行確保路徑正確
   plugins: [
     tailwindcss(),
     react(),
