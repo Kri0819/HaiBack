@@ -39,30 +39,25 @@ const SUPABASE_ANON = import.meta.env.VITE_SUPABASE_ANON_KEY || "YOUR_ANON_KEY";
 const sb = createClient(SUPABASE_URL, SUPABASE_ANON);
 // ─────────────────────────────────────────────────────────────
 
-// ── Supabase auth helpers (Magic Link / Email OTP) ───────────
+// ── Supabase auth helpers (sign In With google) ───────────
 const auth = {
-  /**
-   * Send magic link to email.
-   * First-time users are auto-registered by Supabase.
-   */
-  sendMagicLink: async (email) => {
-    const { error } = await sb.auth.signInWithOtp({
-      email: email.trim().toLowerCase(),
+
+  loginWithGoogle: async () => {
+    const { error } = await sb.auth.signInWithOAuth({
+      provider: 'google',
       options: {
-        // After clicking the link, redirect back to the app
-        emailRedirectTo: window.location.origin,
-      },
+        redirectTo: window.location.origin
+      }
     });
+
     if (error) throw new Error(error.message);
   },
 
-  /** Get current session — call on app start */
   getSession: async () => {
     const { data } = await sb.auth.getSession();
     return data?.session?.user ?? null;
   },
 
-  /** Subscribe to auth state changes (login / logout / token refresh) */
   onAuthChange: (cb) => {
     const { data } = sb.auth.onAuthStateChange((_event, session) => {
       cb(session?.user ?? null);
@@ -71,6 +66,7 @@ const auth = {
   },
 
   logout: () => sb.auth.signOut(),
+
 
   /** Display name: email prefix */
   displayName: (user) => user?.email?.split("@")[0] ?? "使用者",
