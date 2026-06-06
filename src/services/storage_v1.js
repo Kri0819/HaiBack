@@ -67,4 +67,3 @@ export const saveRecords = (rawList) => _set(KEYS.RECORD_CACHE, rawList);
  * clearRecords — wipe the local cache (e.g. on logout).
  */
 export const clearRecords = () => _set(KEYS.RECORD_CACHE, []);
-

@@ -48,5 +48,3 @@ export function recordsReducer(state, action) {
       return state;
   }
 }
-
-
