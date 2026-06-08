@@ -1,8 +1,0 @@
-/* Linting */
-    "noImplicitAny": false,           // 允許不寫類型
-    "noUnusedLocals": false,          // 允許有沒用到的變數
-    "noUnusedParameters": false,      // 允許有沒用到的參數
-    "erasableSyntaxOnly": true,
-    "noFallthroughCasesInSwitch": true
-
-    
