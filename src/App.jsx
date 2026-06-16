@@ -310,10 +310,10 @@ function SettingRow({ icon, label, value, right, onClick, danger, d }) {
 
 // ─── Kind / Status pills ──────────────────────────────────────
 function KindPill({ rec, d }) {
-  const label = rec.kind === KIND.R ? "報銷款"
+  const label = rec.kind === KIND.R ? "純報銷"
     : rec.advStatus === ADV.PENDING   ? "預支審核中"
     : rec.advStatus === ADV.REJECTED  ? "預支未通過"
-    : "預支款";
+    : "需結算";
   const style = d
     ? "bg-zinc-700 text-zinc-200 border-zinc-600"
     : "bg-zinc-100 text-zinc-600 border-zinc-200";
@@ -367,7 +367,7 @@ function Timeline({ rec, compact = false, d }) {
   );
 
   const labels = hasAdv
-    ? ["預支建立", rec.advanceReceived > 0 ? `已領預支 ${fmt(rec.advanceReceived)}` : "已領預支", rec.actualSpent > 0 ? `實際花費 ${fmt(rec.actualSpent)}` : "填寫實際花費", "結算中", "已結清"]
+    ? ["預支建立", rec.advanceReceived > 0 ? `預支金額 ${fmt(rec.advanceReceived)}` : "預支金額", rec.actualSpent > 0 ? `實際花費 ${fmt(rec.actualSpent)}` : "填寫實際花費", "結算中", "已結清"]
     : ["預支建立", rec.actualSpent > 0 ? `實際花費 ${fmt(rec.actualSpent)}` : "填寫實際花費", rec.stage === STAGE.DONE ? "補款完成" : "公司補款", "已完成"];
 
   return (
@@ -397,7 +397,6 @@ function AccountSheet({ user, onLogout, onClose, d }) {
   const opts = [
     { k: "light",  l: "淺色模式", ic: I.sun   },
     { k: "dark",   l: "深色模式", ic: I.moon  },
-    { k: "system", l: "跟隨系統", ic: I.phone },
   ];
   return (
     <Sheet title="設定" onClose={onClose} d={d}>
@@ -535,7 +534,7 @@ function RecordSheet({ initial, onSave, onClose, user, d }) {
     }, user?.id));
   };
 
-  const sheetTitle = isEdit ? "編輯紀錄" : step === 1 ? "記一筆" : kind === "reimburse" ? "報銷款" : "預支款";
+  const sheetTitle = isEdit ? "編輯紀錄" : step === 1 ? "記一筆" : kind === "reimburse" ? "純報銷" : "需結算";
 
   const selBg  = d ? "border-zinc-100 bg-zinc-100" : "border-zinc-900 bg-zinc-900";
   const selTx  = d ? "text-zinc-900" : "text-white";
@@ -560,8 +559,8 @@ function RecordSheet({ initial, onSave, onClose, user, d }) {
             <Field label="款項類型" d={d}>
               <div className="grid grid-cols-2 gap-2">
                 {[
-                  { v: "reimburse", t: "報銷款", s: "自行墊付，事後全額報帳" },
-                  { v: "advance",   t: "預支款", s: "申請預支，活動後結算差額" },
+                  { v: "reimburse", t: "純報銷", s: "自行墊付，全額報帳" },
+                  { v: "advance",   t: "需結算", s: "可申請預支，後續結算差額" },
                 ].map(({ v, t, s }) => (
                   <button key={v} onClick={() => switchKind(v)}
                     className={`p-3.5 rounded-2xl border-2 text-left transition-all ${kind === v ? selBg : unselBg}`}>
@@ -593,7 +592,7 @@ function RecordSheet({ initial, onSave, onClose, user, d }) {
               </>
             )}
 
-            {/* 報銷款：只填金額 */}
+            {/* 純報銷：只填金額 */}
             {kind === "reimburse" && (
               <Field label="金額 ($)" hint="公司應報帳給你的總金額" d={d}>
                 <Input d={d} type="number" placeholder="0" autoFocus={!isEdit}
@@ -601,14 +600,14 @@ function RecordSheet({ initial, onSave, onClose, user, d }) {
               </Field>
             )}
 
-            {/* 預支款：核定預算 + 已領預支（可空） */}
+            {/* 需結算：預算金額 + 預支金額（可空） */}
             {kind === "advance" && (
               <>
-                <Field label="核定預算 ($)" hint="公司核准的活動預算" d={d}>
+                <Field label="預算金額 ($)" hint="活動的總預算金額" d={d}>
                   <Input d={d} type="number" placeholder="0" autoFocus={!isEdit}
                     value={form.amount} onChange={e => set("amount", e.target.value)} />
                 </Field>
-                <Field label="已領預支 ($)" hint="實際拿到的預支款（未領可留空或填 0）" d={d}>
+                <Field label="預支金額 ($)" hint="實際拿到的預支款（未領可填 0）" d={d}>
                   <Input d={d} type="number" placeholder="0"
                     value={form.advanceReceived} onChange={e => set("advanceReceived", e.target.value)} />
                 </Field>
@@ -662,7 +661,7 @@ function AdvStatusSheet({ rec, onSave, onClose, d }) {
           </Field>
         )}
         {choice === "rejected" && (
-          <p className={`text-xs ${C.tx3(d)} px-1`}>未通過將轉為報銷款，公司之後補款給你。</p>
+          <p className={`text-xs ${C.tx3(d)} px-1`}>未通過將轉為純報銷，公司之後補款給你。</p>
         )}
         <PBtn d={d} onClick={() => {
           if (!choice) return alert("請選擇結果");
@@ -684,8 +683,8 @@ function SettleSheet({ rec, onSave, onClose, d }) {
     <Sheet title="填寫實際花費" onClose={onClose} d={d}>
       <div className="flex flex-col gap-5">
         <div className={`rounded-2xl p-4 flex flex-col gap-1.5 ${C.card2(d)}`}>
-          <SRow d={d} l="核定預算" v={fmt(rec.amount)} />
-          {advRec > 0 && <SRow d={d} l="已領預支" v={fmt(advRec)} />}
+          <SRow d={d} l="預算金額" v={fmt(rec.amount)} />
+          {advRec > 0 && <SRow d={d} l="預支金額" v={fmt(advRec)} />}
         </div>
         <Field label="實際花費 ($)" d={d}>
           <Input d={d} type="number" placeholder="0" autoFocus value={spent} onChange={e => setSpent(e.target.value)} />
@@ -861,7 +860,7 @@ function DetailPage({ recId, records, dispatch, onBack, user, d }) {
               <div className="flex gap-5">
                 <div className="shrink-0"><Timeline rec={rec} d={d} /></div>
                 <div className="flex flex-col gap-2 flex-1">
-                  {[{ l: "核定預算", v: fmt(rec.amount) }, toN(rec.advanceReceived) > 0 && { l: "已領預支", v: fmt(rec.advanceReceived) }].filter(Boolean).map(({ l, v }) => (
+                  {[{ l: "預算金額", v: fmt(rec.amount) }, toN(rec.advanceReceived) > 0 && { l: "預支金額", v: fmt(rec.advanceReceived) }].filter(Boolean).map(({ l, v }) => (
                     <div key={l} className={`rounded-2xl p-3 ${C.card2(d)}`}>
                       <div className={`text-[10px] uppercase tracking-wide ${C.tx3(d)} mb-0.5`}>{l}</div>
                       <div className={`text-base font-bold ${C.tx(d)}`}>{v}</div>
@@ -1120,7 +1119,7 @@ function MainApp() {
             <div className={`mt-2 rounded-2xl overflow-hidden divide-y ${C.border(d)} ${C.card(d)}`}>
               {[
                 ["狀態", ["全部","處理中","完成","等待核准"], fStatus, setFStatus],
-                ["類型", [["全部","全部"],[KIND.R,"報銷款"],[KIND.A,"預支款"]], fKind, setFKind],
+                ["類型", [["全部","全部"],[KIND.R,"純報銷"],[KIND.A,"需結算"]], fKind, setFKind],
                 ["排序", [["date_desc","最新"],["date_asc","最舊"],["amount_desc","金額↓"],["amount_asc","金額↑"]], sort, setSort],
               ].map(([label, opts, val, setter]) => (
                 <div key={label} className="flex items-center gap-3 px-3 py-2.5">
