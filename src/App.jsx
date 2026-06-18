@@ -987,13 +987,19 @@ function MainApp() {
   useEffect(() => {
     if (!user) return;
     setLoadingRec(true);
-    db.load().then((raws) => {
-      dispatchRecords({
-        type: RECORDS_ACTION.LOAD_RECORDS,
-        payload: raws.map(derive),
+    db.load()
+      .then((raws) => {
+        dispatchRecords({
+          type: RECORDS_ACTION.LOAD_RECORDS,
+          payload: raws.map(derive),
+        });
+      })
+      .catch((e) => {
+        console.warn("載入失敗:", e.message);
+      })
+      .finally(() => {
+        setLoadingRec(false);
       });
-      setLoadingRec(false);
-    });
   }, [user?.id]);
 
   // ── dispatch — pure state update via reducer, side-effects here ──
@@ -1001,16 +1007,22 @@ function MainApp() {
     // Optimistic local update first
     dispatchRecords(action);
 
-    // Async cloud sync — log errors without reverting (optimistic UI)
+    // Async cloud sync — alert user if it fails (don't fail silently)
+    const onSyncFail = (e) => {
+      console.warn("sync error:", e.message);
+      alert("⚠️ 雲端同步失敗，這筆紀錄可能只存在本機：\n" + e.message);
+    };
+
     if (action.type === RECORDS_ACTION.ADD_RECORD) {
-      db.upsert(strip(action.payload)).catch(e => console.warn("sync error:", e.message));
+      db.upsert(strip(action.payload)).catch(onSyncFail);
     } else if (action.type === RECORDS_ACTION.UPDATE_RECORD) {
-      db.upsert(strip(action.payload)).catch(e => console.warn("sync error:", e.message));
+      db.upsert(strip(action.payload)).catch(onSyncFail);
     } else if (action.type === RECORDS_ACTION.DELETE_RECORD) {
       setSelId(null);
-      db.delete(action.payload).catch(e => console.warn("sync error:", e.message));
+      db.delete(action.payload).catch(onSyncFail);
     }
   }, []);
+
 
   const login  = (u) => { setUser(u); setSheet(null); };
   const logout = async () => { await auth.logout(); setUser(null); setSheet(null); };
