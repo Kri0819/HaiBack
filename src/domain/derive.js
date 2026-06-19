@@ -3,16 +3,23 @@ import { toN, clamp } from "./records.js";
 
 /**
  * computeStage — determine the lifecycle stage of an approved advance.
+ *
+ * Settled (DONE) only when:
+ *   - diff is exactly 0 (perfectly balanced, nothing to settle), OR
+ *   - the outstanding amount (absDiff) has been fully paid back
+ *     via paymentRecords — regardless of direction (company→me or me→company)
+ *
+ * iOwe only affects WHO owes WHOM, not WHETHER it's settled.
  */
 export const computeStage = (raw) => {
   if (!toN(raw.actualSpent)) return STAGE.WAITING;
 
-  const advRec = toN(raw.advanceReceived);
-  const diff   = advRec - toN(raw.actualSpent);
-  const iOwe   = advRec > 0 && diff > 0;
-  const paid   = (raw.paymentRecords || []).reduce((s, r) => s + toN(r.amount), 0);
+  const advRec  = toN(raw.advanceReceived);
+  const diff    = advRec - toN(raw.actualSpent);
+  const absDiff = Math.abs(diff);
+  const paid    = (raw.paymentRecords || []).reduce((s, r) => s + toN(r.amount), 0);
 
-  return (Math.abs(diff) === 0 || !iOwe || paid >= Math.abs(diff))
+  return (absDiff === 0 || paid >= absDiff)
     ? STAGE.DONE
     : STAGE.SETTLING;
 };
