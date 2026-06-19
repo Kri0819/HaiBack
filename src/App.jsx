@@ -672,13 +672,11 @@ function AdvStatusSheet({ rec, onSave, onClose, d }) {
   );
 }
 
-// ─── Settle Sheet ──────────────────────────────────────────────
+// ─── Settle Sheet (kept for quick-action card path) ───────────
 function SettleSheet({ rec, onSave, onClose, d }) {
   const [spent, setSpent] = useState(rec.actualSpent > 0 ? String(rec.actualSpent) : "");
   const [date,  setDate]  = useState(today());
   const advRec = toN(rec.advanceReceived);
-  const diff   = advRec - toN(spent);
-  const iOwe   = advRec > 0 && diff > 0;
   return (
     <Sheet title="填寫實際花費" onClose={onClose} d={d}>
       <div className="flex flex-col gap-5">
@@ -692,12 +690,6 @@ function SettleSheet({ rec, onSave, onClose, d }) {
         <Field label="結算日期" d={d}>
           <DateInput d={d} value={date} onChange={setDate} />
         </Field>
-        {spent !== "" && (
-          <div className={`rounded-2xl p-4 flex items-center justify-between ${C.card2(d)}`}>
-            <span className={`text-sm ${C.tx2(d)}`}>{iOwe ? "需繳回公司" : "公司補我"}</span>
-            <span className={`text-xl font-bold ${C.tx(d)}`}>{Math.abs(diff) === 0 ? "剛好平衡 🎉" : fmt(Math.abs(diff))}</span>
-          </div>
-        )}
         <PBtn d={d} onClick={() => { if (spent === "") return alert("請輸入實際花費"); onSave({ actualSpent: toN(spent), settlementDate: date }); }}>確認結算</PBtn>
       </div>
     </Sheet>
@@ -797,6 +789,9 @@ function RecordCard({ rec, onSelect, onAction, d }) {
 // ─── Detail Page ──────────────────────────────────────────────
 function DetailPage({ recId, records, dispatch, onBack, user, d }) {
   const [sheet, setSheet] = useState(null);
+  const [inlineSettle, setInlineSettle] = useState(false);
+  const [spentInput, setSpentInput] = useState("");
+  const [settleDateInput, setSettleDateInput] = useState(today());
   const rec = records.find(r => r.id === recId);
   if (!rec) { onBack(); return null; }
   const isPending = rec.advStatus === ADV.PENDING;
@@ -813,8 +808,14 @@ function DetailPage({ recId, records, dispatch, onBack, user, d }) {
   const handleCta = () => {
     if (isPending) return setSheet("status");
     if (isR) return setSheet("pay");
-    if (rec.stage === STAGE.WAITING) return setSheet("settle");
+    if (rec.stage === STAGE.WAITING) { setSpentInput(""); setSettleDateInput(today()); return setInlineSettle(true); }
     if (rec.stage === STAGE.SETTLING) return setSheet("pay");
+  };
+
+  const submitInlineSettle = () => {
+    if (spentInput === "") return alert("請輸入實際花費");
+    dispatch({ type: RECORDS_ACTION.UPDATE_RECORD, payload: derive({ ...strip(rec), actualSpent: toN(spentInput), settlementDate: settleDateInput }) });
+    setInlineSettle(false);
   };
 
   return (
@@ -891,17 +892,52 @@ function DetailPage({ recId, records, dispatch, onBack, user, d }) {
 
         {/* CTA */}
         {ctaLabel && (
-          <div className={`rounded-3xl p-5 mb-4 flex items-center justify-between ${d ? "bg-zinc-100" : "bg-zinc-900"}`}>
-            <div>
-              <div className={`text-xs mb-1 ${d ? "text-zinc-500" : "text-white/50"}`}>{isR ? "剩餘未入帳" : rec.stage === STAGE.SETTLING ? "剩餘" : "下一步"}</div>
-              {(isR || rec.stage === STAGE.SETTLING) && <div className={`text-2xl font-bold ${d ? "text-zinc-900" : "text-white"}`}>{fmt(rec.remaining)}</div>}
-              {rec.stage === STAGE.WAITING && <div className={`text-sm font-semibold ${d ? "text-zinc-900" : "text-white"}`}>活動結束了嗎？</div>}
-              {isPending && <div className={`text-sm font-semibold ${d ? "text-zinc-900" : "text-white"}`}>等待公司批准</div>}
-            </div>
-            <button onClick={handleCta}
-              className={`flex items-center gap-1.5 px-5 py-3 rounded-2xl text-sm font-bold hover:opacity-90 active:scale-95 transition-all ${d ? "bg-zinc-900 text-white" : "bg-white text-zinc-900"}`}>
-              {I.plus} {ctaLabel}
-            </button>
+          <div className={`rounded-3xl p-5 mb-4 ${d ? "bg-zinc-100" : "bg-zinc-900"}`}>
+            {!inlineSettle ? (
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className={`text-xs mb-1 ${d ? "text-zinc-500" : "text-white/50"}`}>{isR ? "剩餘未入帳" : rec.stage === STAGE.SETTLING ? "剩餘" : "下一步"}</div>
+                  {(isR || rec.stage === STAGE.SETTLING) && <div className={`text-2xl font-bold ${d ? "text-zinc-900" : "text-white"}`}>{fmt(rec.remaining)}</div>}
+                  {rec.stage === STAGE.WAITING && <div className={`text-sm font-semibold ${d ? "text-zinc-900" : "text-white"}`}>活動結束了嗎？</div>}
+                  {isPending && <div className={`text-sm font-semibold ${d ? "text-zinc-900" : "text-white"}`}>等待公司批准</div>}
+                </div>
+                <button onClick={handleCta}
+                  className={`flex items-center gap-1.5 px-5 py-3 rounded-2xl text-sm font-bold hover:opacity-90 active:scale-95 transition-all ${d ? "bg-zinc-900 text-white" : "bg-white text-zinc-900"}`}>
+                  {I.plus} {ctaLabel}
+                </button>
+              </div>
+            ) : (
+              /* Inline expansion — fills in actualSpent without opening a separate sheet */
+              <div className="flex flex-col gap-4">
+                <div className={`text-sm font-semibold ${d ? "text-zinc-900" : "text-white"}`}>填寫實際花費</div>
+                <div className="flex flex-col gap-1.5">
+                  <label className={`text-xs font-semibold uppercase tracking-wider ${d ? "text-zinc-500" : "text-white/50"}`}>實際花費 ($)</label>
+                  <input
+                    type="number" placeholder="0" autoFocus
+                    value={spentInput} onChange={e => setSpentInput(e.target.value)}
+                    className={`w-full px-4 py-3 rounded-2xl border text-sm focus:outline-none focus:ring-2 ${d ? "bg-white border-zinc-200 text-zinc-900 focus:ring-black/10" : "bg-zinc-800 border-zinc-700 text-white focus:ring-white/10"}`}
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className={`text-xs font-semibold uppercase tracking-wider ${d ? "text-zinc-500" : "text-white/50"}`}>結算日期</label>
+                  <div className={`flex items-center gap-3 px-4 py-3 rounded-2xl border ${d ? "bg-white border-zinc-200" : "bg-zinc-800 border-zinc-700"}`}>
+                    <span className={d ? "text-zinc-400" : "text-white/40"}>{I.cal}</span>
+                    <input type="date" value={settleDateInput} onChange={e => setSettleDateInput(e.target.value)}
+                      className={`flex-1 text-sm font-medium bg-transparent focus:outline-none ${d ? "text-zinc-900" : "text-white"}`} />
+                  </div>
+                </div>
+                <div className="flex gap-3">
+                  <button onClick={() => setInlineSettle(false)}
+                    className={`flex-1 py-3 rounded-2xl border text-sm font-semibold transition-all ${d ? "border-zinc-300 text-zinc-600 hover:bg-zinc-200" : "border-zinc-700 text-zinc-300 hover:bg-zinc-800"}`}>
+                    取消
+                  </button>
+                  <button onClick={submitInlineSettle}
+                    className={`flex-1 py-3 rounded-2xl text-sm font-bold hover:opacity-90 active:scale-95 transition-all ${d ? "bg-zinc-900 text-white" : "bg-white text-zinc-900"}`}>
+                    確認結算
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
