@@ -792,6 +792,12 @@ function DetailPage({ recId, records, dispatch, onBack, user, d }) {
   const [inlineSettle, setInlineSettle] = useState(false);
   const [spentInput, setSpentInput] = useState("");
   const [settleDateInput, setSettleDateInput] = useState(today());
+  const [inlinePay, setInlinePay] = useState(false);
+  const [payAmountInput, setPayAmountInput] = useState("");
+  const [payDateInput, setPayDateInput] = useState(today());
+  const [inlineStatus, setInlineStatus] = useState(false);
+  const [statusChoice, setStatusChoice] = useState("");
+  const [statusAdvRecInput, setStatusAdvRecInput] = useState("");
   const rec = records.find(r => r.id === recId);
   if (!rec) { onBack(); return null; }
   const isPending = rec.advStatus === ADV.PENDING;
@@ -806,10 +812,31 @@ function DetailPage({ recId, records, dispatch, onBack, user, d }) {
   })();
 
   const handleCta = () => {
-    if (isPending) return setSheet("status");
-    if (isR) return setSheet("pay");
+    if (isPending) { setStatusChoice(""); setStatusAdvRecInput(""); return setInlineStatus(true); }
+    if (isR) { setPayAmountInput(""); setPayDateInput(today()); return setInlinePay(true); }
     if (rec.stage === STAGE.WAITING) { setSpentInput(""); setSettleDateInput(today()); return setInlineSettle(true); }
-    if (rec.stage === STAGE.SETTLING) return setSheet("pay");
+    if (rec.stage === STAGE.SETTLING) { setPayAmountInput(""); setPayDateInput(today()); return setInlinePay(true); }
+  };
+
+  const submitInlinePay = () => {
+    const v = toN(payAmountInput);
+    if (!v || v <= 0) return alert("請輸入金額");
+    dispatch({ type: RECORDS_ACTION.UPDATE_RECORD, payload: derive({ ...strip(rec), paymentRecords: [...rec.pr, { date: payDateInput, amount: v }] }) });
+    setInlinePay(false);
+  };
+
+  const submitInlineStatus = () => {
+    if (!statusChoice) return alert("請選擇結果");
+    dispatch({
+      type: RECORDS_ACTION.UPDATE_RECORD,
+      payload: derive({
+        ...strip(rec),
+        advStatus: statusChoice === "approved" ? ADV.APPROVED : ADV.REJECTED,
+        kind: statusChoice === "rejected" ? KIND.R : KIND.A,
+        advanceReceived: statusChoice === "approved" ? toN(statusAdvRecInput) : 0,
+      }),
+    });
+    setInlineStatus(false);
   };
 
   const submitInlineSettle = () => {
@@ -893,7 +920,7 @@ function DetailPage({ recId, records, dispatch, onBack, user, d }) {
         {/* CTA */}
         {ctaLabel && (
           <div className={`rounded-3xl p-5 mb-4 ${d ? "bg-zinc-100" : "bg-zinc-900"}`}>
-            {!inlineSettle ? (
+            {!inlineSettle && !inlinePay && !inlineStatus && (
               <div className="flex items-center justify-between">
                 <div>
                   <div className={`text-xs mb-1 ${d ? "text-zinc-500" : "text-white/50"}`}>{isR ? "剩餘未入帳" : rec.stage === STAGE.SETTLING ? "剩餘" : "下一步"}</div>
@@ -906,7 +933,9 @@ function DetailPage({ recId, records, dispatch, onBack, user, d }) {
                   {I.plus} {ctaLabel}
                 </button>
               </div>
-            ) : (
+            )}
+
+            {inlineSettle && (
               /* Inline expansion — fills in actualSpent without opening a separate sheet */
               <div className="flex flex-col gap-4">
                 <div className={`text-sm font-semibold ${d ? "text-zinc-900" : "text-white"}`}>填寫實際花費</div>
@@ -934,6 +963,92 @@ function DetailPage({ recId, records, dispatch, onBack, user, d }) {
                   <button onClick={submitInlineSettle}
                     className={`flex-1 py-3 rounded-2xl text-sm font-bold hover:opacity-90 active:scale-95 transition-all ${d ? "bg-zinc-900 text-white" : "bg-white text-zinc-900"}`}>
                     確認結算
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {inlinePay && (
+              /* Inline expansion — records a 入帳 payment without opening a separate sheet */
+              <div className="flex flex-col gap-4">
+                <div className={`text-sm font-semibold ${d ? "text-zinc-900" : "text-white"}`}>入帳金額</div>
+                <div className="flex flex-col gap-1.5">
+                  <label className={`text-xs font-semibold uppercase tracking-wider ${d ? "text-zinc-500" : "text-white/50"}`}>入帳金額 ($)</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="number" placeholder="0" autoFocus
+                      value={payAmountInput} onChange={e => setPayAmountInput(e.target.value)}
+                      className={`flex-1 px-4 py-3 rounded-2xl border text-sm focus:outline-none focus:ring-2 ${d ? "bg-white border-zinc-200 text-zinc-900 focus:ring-black/10" : "bg-zinc-800 border-zinc-700 text-white focus:ring-white/10"}`}
+                    />
+                    {rec.remaining > 0 && (
+                      <button onClick={() => setPayAmountInput(String(rec.remaining))}
+                        className={`px-4 rounded-2xl border text-xs font-semibold whitespace-nowrap transition-colors ${d ? "border-zinc-300 text-zinc-600 hover:bg-zinc-200" : "border-zinc-700 text-zinc-300 hover:bg-zinc-800"}`}>
+                        全額
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className={`text-xs font-semibold uppercase tracking-wider ${d ? "text-zinc-500" : "text-white/50"}`}>日期</label>
+                  <div className={`flex items-center gap-3 px-4 py-3 rounded-2xl border ${d ? "bg-white border-zinc-200" : "bg-zinc-800 border-zinc-700"}`}>
+                    <span className={d ? "text-zinc-400" : "text-white/40"}>{I.cal}</span>
+                    <input type="date" value={payDateInput} onChange={e => setPayDateInput(e.target.value)}
+                      className={`flex-1 text-sm font-medium bg-transparent focus:outline-none ${d ? "text-zinc-900" : "text-white"}`} />
+                  </div>
+                </div>
+                <div className="flex gap-3">
+                  <button onClick={() => setInlinePay(false)}
+                    className={`flex-1 py-3 rounded-2xl border text-sm font-semibold transition-all ${d ? "border-zinc-300 text-zinc-600 hover:bg-zinc-200" : "border-zinc-700 text-zinc-300 hover:bg-zinc-800"}`}>
+                    取消
+                  </button>
+                  <button onClick={submitInlinePay}
+                    className={`flex-1 py-3 rounded-2xl text-sm font-bold hover:opacity-90 active:scale-95 transition-all ${d ? "bg-zinc-900 text-white" : "bg-white text-zinc-900"}`}>
+                    確認入帳
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {inlineStatus && (
+              /* Inline expansion — update advance approval result without opening a separate sheet */
+              <div className="flex flex-col gap-4">
+                <div className={`text-sm font-semibold ${d ? "text-zinc-900" : "text-white"}`}>更新申請結果</div>
+                <div className="flex flex-col gap-1.5">
+                  <label className={`text-xs font-semibold uppercase tracking-wider ${d ? "text-zinc-500" : "text-white/50"}`}>核准結果</label>
+                  <div className="flex gap-2">
+                    {[{ v: "approved", l: "核准撥款" }, { v: "rejected", l: "未通過" }].map(({ v, l }) => (
+                      <button key={v} onClick={() => setStatusChoice(v)}
+                        className={`flex-1 py-3 rounded-2xl border-2 text-sm font-semibold transition-all ${
+                          statusChoice === v
+                            ? (d ? "border-zinc-900 bg-zinc-900 text-white" : "border-white bg-white text-zinc-900")
+                            : (d ? "border-zinc-300 text-zinc-600" : "border-zinc-700 text-zinc-300")
+                        }`}>
+                        {l}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {statusChoice === "approved" && (
+                  <div className="flex flex-col gap-1.5">
+                    <label className={`text-xs font-semibold uppercase tracking-wider ${d ? "text-zinc-500" : "text-white/50"}`}>實際撥款金額 ($)</label>
+                    <input
+                      type="number" placeholder="0" autoFocus
+                      value={statusAdvRecInput} onChange={e => setStatusAdvRecInput(e.target.value)}
+                      className={`w-full px-4 py-3 rounded-2xl border text-sm focus:outline-none focus:ring-2 ${d ? "bg-white border-zinc-200 text-zinc-900 focus:ring-black/10" : "bg-zinc-800 border-zinc-700 text-white focus:ring-white/10"}`}
+                    />
+                  </div>
+                )}
+                {statusChoice === "rejected" && (
+                  <p className={`text-xs ${d ? "text-zinc-500" : "text-white/50"}`}>未通過將轉為純報銷，公司之後補款給你。</p>
+                )}
+                <div className="flex gap-3">
+                  <button onClick={() => setInlineStatus(false)}
+                    className={`flex-1 py-3 rounded-2xl border text-sm font-semibold transition-all ${d ? "border-zinc-300 text-zinc-600 hover:bg-zinc-200" : "border-zinc-700 text-zinc-300 hover:bg-zinc-800"}`}>
+                    取消
+                  </button>
+                  <button onClick={submitInlineStatus}
+                    className={`flex-1 py-3 rounded-2xl text-sm font-bold hover:opacity-90 active:scale-95 transition-all ${d ? "bg-zinc-900 text-white" : "bg-white text-zinc-900"}`}>
+                    確認
                   </button>
                 </div>
               </div>
@@ -969,9 +1084,7 @@ function DetailPage({ recId, records, dispatch, onBack, user, d }) {
       </div>
 
       {sheet === "edit" && <RecordSheet d={d} initial={rec} user={user} onSave={f => { dispatch({ type: RECORDS_ACTION.UPDATE_RECORD, payload: derive({ ...strip(rec), ...strip(buildRaw(f, user?.id)) }) }); setSheet(null); }} onClose={() => setSheet(null)} />}
-      {sheet === "status" && <AdvStatusSheet d={d} rec={rec} onSave={u => { dispatch({ type: RECORDS_ACTION.UPDATE_RECORD, payload: derive({ ...strip(rec), ...u }) }); setSheet(null); }} onClose={() => setSheet(null)} />}
       {sheet === "settle" && <SettleSheet d={d} rec={rec} onSave={({ actualSpent, settlementDate }) => { dispatch({ type: RECORDS_ACTION.UPDATE_RECORD, payload: derive({ ...strip(rec), actualSpent, settlementDate }) }); setSheet(null); }} onClose={() => setSheet(null)} />}
-      {sheet === "pay" && rec.remaining > 0 && <PaymentSheet d={d} rec={rec} onSave={p => { dispatch({ type: RECORDS_ACTION.UPDATE_RECORD, payload: derive({ ...strip(rec), paymentRecords: [...rec.pr, p] }) }); setSheet(null); }} onClose={() => setSheet(null)} />}
       {sheet === "del" && (
         <Sheet title="清掉這筆" onClose={() => setSheet(null)} d={d}>
           <div className="flex flex-col gap-5">
