@@ -380,6 +380,9 @@ function Timeline({ rec, compact = false, d }) {
       {labels.map((label, i) => {
         const done = i < cur, active = i === cur;
         const stepDate = stepDates[i];
+        // Show date for any step that's been reached (done or currently active-and-checked,
+        // e.g. "已結清"/"已完成" is the final active step but should still show its date)
+        const showDate = (done || active) && stepDate;
         return (
           <div key={i} className="flex items-start gap-3">
             <div className="flex flex-col items-center shrink-0">
@@ -391,7 +394,7 @@ function Timeline({ rec, compact = false, d }) {
             </div>
             <div className="flex items-center gap-2 pb-3 pt-0.5 flex-wrap">
               <p className={`text-sm ${done ? `${C.tx3(d)} line-through` : active ? `${C.tx(d)} font-semibold` : C.tx3(d)}`}>{label}</p>
-              {done && stepDate && <span className={`text-xs ${C.tx3(d)}`}>{fmtD(stepDate)}</span>}
+              {showDate && <span className={`text-xs ${C.tx3(d)}`}>{fmtD(stepDate)}</span>}
             </div>
           </div>
         );
@@ -603,7 +606,7 @@ function RecordSheet({ initial, onSave, onClose, user, d }) {
 
             {/* 純報銷：只填金額 */}
             {kind === "reimburse" && (
-              <Field label="金額 ($)" hint="公司應報帳給你的總金額" d={d}>
+              <Field label="金額 ($)" hint="你向公司報銷的總金額，亦即你的單筆費用全額" d={d}>
                 <Input d={d} type="number" placeholder="0" autoFocus={!isEdit}
                   value={form.amount} onChange={e => set("amount", e.target.value)} />
               </Field>
@@ -612,11 +615,11 @@ function RecordSheet({ initial, onSave, onClose, user, d }) {
             {/* 需結算：核定金額 + 預支金額（可空） */}
             {kind === "advance" && (
               <>
-                <Field label="核定金額 ($)" hint="此項欠款的總金額" d={d}>
+                <Field label="核定金額 ($)" hint="此項目預計花費的金額" d={d}>
                   <Input d={d} type="number" placeholder="0" autoFocus={!isEdit}
                     value={form.amount} onChange={e => set("amount", e.target.value)} />
                 </Field>
-                <Field label="預支金額 ($)" hint="此項欠款的預支金額（未領可填 0）" d={d}>
+                <Field label="預支金額 ($)" hint="此項目預先向公司請領之費用（未申請預支費用可留空或填 0）" d={d}>
                   <Input d={d} type="number" placeholder="0"
                     value={form.advanceReceived} onChange={e => set("advanceReceived", e.target.value)} />
                 </Field>
@@ -717,8 +720,8 @@ function PaymentSheet({ rec, onSave, onClose, d }) {
         <div className={`rounded-2xl p-4 flex flex-col gap-1.5 ${C.card2(d)}`}>
           <p className={`text-sm font-semibold ${C.tx(d)} truncate mb-1`}>{rec.title}</p>
           {isR
-            ? <><SRow d={d} l="應收" v={fmt(rec.amount)}/><SRow d={d} l="已入帳" v={fmt(rec.paid)}/><div className={`h-px my-1 ${C.divider(d)}`}/><SRow d={d} l="剩餘" v={fmt(rec.remaining)}/></>
-            : <><SRow d={d} l={rec.iOwe ? "需繳回" : "公司補我"} v={fmt(rec.absDiff)}/><SRow d={d} l="已處理" v={fmt(rec.paid)}/><div className={`h-px my-1 ${C.divider(d)}`}/><SRow d={d} l="剩餘" v={fmt(rec.remaining)}/></>
+            ? <><SRow d={d} l="欠款金額" v={fmt(rec.amount)}/><SRow d={d} l="公司已還" v={fmt(rec.paid)}/><div className={`h-px my-1 ${C.divider(d)}`}/><SRow d={d} l="剩餘" v={fmt(rec.remaining)}/></>
+            : <><SRow d={d} l={rec.iOwe ? "需繳回" : "公司已還"} v={fmt(rec.absDiff)}/><SRow d={d} l="已處理" v={fmt(rec.paid)}/><div className={`h-px my-1 ${C.divider(d)}`}/><SRow d={d} l="剩餘" v={fmt(rec.remaining)}/></>
           }
         </div>
         <Field label={`${label}金額 ($)`} d={d}>
@@ -779,7 +782,7 @@ function RecordCard({ rec, onSelect, onAction, d }) {
       </div>
       <div className="px-4 pb-3 flex items-center gap-4">
         {!isPending && rec.effectiveKind === KIND.A && <div className="shrink-0"><Timeline rec={rec} compact d={d} /></div>}
-        <div className={rec.effectiveKind === KIND.R && !isPending ? "ml-auto text-right" : ""}>
+        <div>
           {focal.l && <div className={`text-[10px] font-medium uppercase tracking-wide ${C.tx3(d)}`}>{focal.l}</div>}
           {focal.v && <div className={`text-lg font-bold mt-0.5 ${C.tx(d)}`}>{focal.v}</div>}
         </div>
@@ -883,7 +886,7 @@ function DetailPage({ recId, records, dispatch, onBack, user, d }) {
         {/* Amounts */}
         {isR || isPending ? (
           <div className="grid grid-cols-3 gap-3 mb-4">
-            {[{ l: "應收金額", v: fmt(rec.amount) }, { l: "已入帳", v: fmt(rec.paid) }, { l: "剩餘", v: fmt(rec.remaining) }].map(({ l, v }) => (
+            {[{ l: "欠款金額", v: fmt(rec.amount) }, { l: "公司已還", v: fmt(rec.paid) }, { l: "剩餘", v: fmt(rec.remaining) }].map(({ l, v }) => (
               <div key={l} className={`rounded-2xl p-3.5 ${C.card(d)}`}>
                 <div className={`text-xs ${C.tx3(d)} mb-1`}>{l}</div>
                 <div className={`text-lg font-bold ${C.tx(d)}`}>{v}</div>
@@ -899,7 +902,7 @@ function DetailPage({ recId, records, dispatch, onBack, user, d }) {
             {rec.actualSpent > 0 && (
               <div className="grid grid-cols-3 gap-3">
                 {[
-                  { l: "欠款總額", v: fmt(rec.actualSpent) },
+                  { l: "欠款金額", v: fmt(rec.actualSpent) },
                   { l: rec.iOwe ? "需繳回" : "公司已還", v: fmt(rec.absDiff) },
                   { l: "剩餘", v: fmt(rec.remaining) },
                 ].map(({ l, v }) => (
@@ -1175,19 +1178,25 @@ function MainApp() {
   const visible = useMemo(() => records, [records]); // Supabase RLS already filters by user
 
   const stats = useMemo(() => {
+    // ── 欠款總額規則 ──────────────────────────────────────────
+    // 只累計「公司欠我」的金額，多筆累加（例：500 + 800 = 1300）
+    // 「我欠公司」的金額絕對不扣除，也不列入計算
+    // 領取預支金額（STAGE.WAITING 階段）本身不影響此數字，
+    // 只有填完實際花費、進入 STAGE.SETTLING 且公司欠我時才計入
     const owed = visible.reduce((s, r) => {
-      // Case 1: 純報銷款 — 尚未入帳的全額
+      // Case 1: 純報銷款 — 尚未入帳的全額，全部算公司欠我
       if (r.effectiveKind === KIND.R) {
         return s + r.remaining;
       }
 
-      // Case 2 & 3: 預支款 — 只在有實際花費且公司欠我時計入
+      // Case 2 & 3: 預支款 — 只在已填實際花費（SETTLING）且公司欠我時累加
       if (r.kind === KIND.A && r.stage === STAGE.SETTLING) {
-        // diff < 0 → actualSpent > advanceReceived → 公司欠我 → 加入
+        // !r.iOwe → 公司欠我（actualSpent > advanceReceived）→ 累加
         if (!r.iOwe) return s + clamp(r.absDiff - r.paid);
-        // diff > 0 → 預支 > 實支 → 我欠公司 → 不扣、不列入
+        // r.iOwe → 我欠公司（advanceReceived > actualSpent）→ 不扣、不列入，直接跳過
       }
 
+      // 其他情況（如 STAGE.WAITING 領預支階段）完全不影響欠款總額
       return s;
     }, 0);
 
@@ -1206,6 +1215,12 @@ function MainApp() {
       return true;
     })
     .sort((a, b) => {
+      // 預設（全部狀態時）優先顯示「處理中」，「完成」排在後面
+      if (fStatus === "全部") {
+        const aDone = a.status === "完成" ? 1 : 0;
+        const bDone = b.status === "完成" ? 1 : 0;
+        if (aDone !== bDone) return aDone - bDone;
+      }
       if (sort === "date_desc")   return b.date.localeCompare(a.date);
       if (sort === "date_asc")    return a.date.localeCompare(b.date);
       if (sort === "amount_desc") return toN(b.amount) - toN(a.amount);
@@ -1275,7 +1290,7 @@ function MainApp() {
           {sheet === "filter" && (
             <div className={`mt-2 rounded-2xl overflow-hidden divide-y ${C.border(d)} ${C.card(d)}`}>
               {[
-                ["狀態", ["全部","處理中","完成","等待核准"], fStatus, setFStatus],
+                ["狀態", ["全部","處理中","完成"], fStatus, setFStatus],
                 ["類型", [["全部","全部"],[KIND.R,"純報銷"],[KIND.A,"需結算"]], fKind, setFKind],
                 ["排序", [["date_desc","最新"],["date_asc","最舊"],["amount_desc","金額↓"],["amount_asc","金額↑"]], sort, setSort],
               ].map(([label, opts, val, setter]) => (
