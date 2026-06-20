@@ -758,7 +758,7 @@ function RecordCard({ rec, onSelect, onAction, d }) {
     if (rec.effectiveKind === KIND.R) return rec.remaining > 0 ? { l: "剩餘未收", v: fmt(rec.remaining) } : { l: "已完成", v: "✓" };
     switch (rec.stage) {
       case STAGE.WAITING:  return { l: "等待填費", v: "" };
-      case STAGE.SETTLING: return { l: rec.iOwe ? "需繳回" : "公司補我", v: fmt(rec.absDiff) };
+      case STAGE.SETTLING: return { l: rec.iOwe ? "需繳回" : "公司已還", v: fmt(rec.absDiff) };
       case STAGE.DONE:     return { l: "已結清", v: "✓" };
       default: return { l: fmt(rec.amount), v: "" };
     }
