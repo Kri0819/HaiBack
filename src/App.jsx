@@ -438,7 +438,7 @@ function AccountSheet({ user, onLogout, onClose, d }) {
         </div>
 
         <p className={`text-center text-xs pt-2 pb-1 ${d ? "text-zinc-600" : "text-zinc-400"}`}>
-          HaiBack｜還袂<br/>Version 1.0
+          HaiBack｜還袂<br/>Version 1.0.0
         </p>
       </div>
     </Sheet>
@@ -758,7 +758,7 @@ function RecordCard({ rec, onSelect, onAction, d }) {
     if (rec.effectiveKind === KIND.R) return rec.remaining > 0 ? { l: "剩餘未收", v: fmt(rec.remaining) } : { l: "已完成", v: "✓" };
     switch (rec.stage) {
       case STAGE.WAITING:  return { l: "等待填費", v: "" };
-      case STAGE.SETTLING: return { l: rec.iOwe ? "需繳回" : "公司已還", v: fmt(rec.absDiff) };
+      case STAGE.SETTLING: return { l: rec.iOwe ? "需繳回" : "公司應補", v: fmt(rec.absDiff) };
       case STAGE.DONE:     return { l: "已結清", v: "✓" };
       default: return { l: fmt(rec.amount), v: "" };
     }
@@ -1111,7 +1111,7 @@ function MainApp() {
   const [sheet,      setSheet]      = useState(null);
   const [quickId,    setQuickId]    = useState(null);
   const [search,     setSearch]     = useState("");
-  const [fStatus,    setFStatus]    = useState("全部");
+  const [fStatus,    setFStatus]    = useState("處理中");
   const [fKind,      setFKind]      = useState("全部");
   const [sort,       setSort]       = useState("date_desc");
   const [guestOk,    setGuestOk]    = useState(() => getGuestDismissed());
@@ -1215,12 +1215,6 @@ function MainApp() {
       return true;
     })
     .sort((a, b) => {
-      // 預設（全部狀態時）優先顯示「處理中」，「完成」排在後面
-      if (fStatus === "全部") {
-        const aDone = a.status === "完成" ? 1 : 0;
-        const bDone = b.status === "完成" ? 1 : 0;
-        if (aDone !== bDone) return aDone - bDone;
-      }
       if (sort === "date_desc")   return b.date.localeCompare(a.date);
       if (sort === "date_asc")    return a.date.localeCompare(b.date);
       if (sort === "amount_desc") return toN(b.amount) - toN(a.amount);
@@ -1228,7 +1222,7 @@ function MainApp() {
       return 0;
     }), [visible, fStatus, fKind, search, sort]);
 
-  const hasFilter = fStatus !== "全部" || fKind !== "全部" || sort !== "date_desc";
+  const hasFilter = fStatus !== "處理中" || fKind !== "全部" || sort !== "date_desc";
   const quickRec  = quickId ? records.find(r => r.id === quickId) : null;
   const quickType = (() => {
     if (!quickRec) return null;
