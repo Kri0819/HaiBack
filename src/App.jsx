@@ -370,10 +370,16 @@ function Timeline({ rec, compact = false, d }) {
     ? ["款項建立", rec.advanceReceived > 0 ? `預支金額 ${fmt(rec.advanceReceived)}` : "預支金額", rec.actualSpent > 0 ? `實際花費 ${fmt(rec.actualSpent)}` : "填寫實際花費", "結算中", "已結清"]
     : ["款項建立", rec.actualSpent > 0 ? `實際花費 ${fmt(rec.actualSpent)}` : "填寫實際花費", rec.stage === STAGE.DONE ? "補款完成" : "公司補款", "已完成"];
 
+  // Dates aligned to each step index — only shown for completed/active steps
+  const stepDates = hasAdv
+    ? [rec.date, rec.date, rec.settlementDate, rec.settlementDate, rec.settlementDate]
+    : [rec.date, rec.settlementDate, rec.settlementDate, rec.settlementDate];
+
   return (
     <div className="flex flex-col">
       {labels.map((label, i) => {
         const done = i < cur, active = i === cur;
+        const stepDate = stepDates[i];
         return (
           <div key={i} className="flex items-start gap-3">
             <div className="flex flex-col items-center shrink-0">
@@ -383,7 +389,10 @@ function Timeline({ rec, compact = false, d }) {
               </div>
               {i < labels.length-1 && <div className={`w-px my-1 ${done ? lineDone : linePend}`} style={{minHeight:14}}/>}
             </div>
-            <p className={`text-sm pb-3 pt-0.5 ${done ? `${C.tx3(d)} line-through` : active ? `${C.tx(d)} font-semibold` : C.tx3(d)}`}>{label}</p>
+            <div className="flex items-center gap-2 pb-3 pt-0.5 flex-wrap">
+              <p className={`text-sm ${done ? `${C.tx3(d)} line-through` : active ? `${C.tx(d)} font-semibold` : C.tx3(d)}`}>{label}</p>
+              {done && stepDate && <span className={`text-xs ${C.tx3(d)}`}>{fmtD(stepDate)}</span>}
+            </div>
           </div>
         );
       })}
@@ -885,33 +894,20 @@ function DetailPage({ recId, records, dispatch, onBack, user, d }) {
           <div className="flex flex-col gap-3 mb-4">
             <div className={`rounded-3xl p-5 ${C.card(d)}`}>
               <p className={`text-xs font-bold uppercase tracking-wider ${C.tx3(d)} mb-4`}>流程</p>
-              <div className="flex gap-5">
-                <div className="shrink-0"><Timeline rec={rec} d={d} /></div>
-                <div className="flex flex-col gap-2 flex-1">
-                  {[{ l: "核定金額", v: fmt(rec.amount) }, toN(rec.advanceReceived) > 0 && { l: "預支金額", v: fmt(rec.advanceReceived) }].filter(Boolean).map(({ l, v }) => (
-                    <div key={l} className={`rounded-2xl p-3 ${C.card2(d)}`}>
-                      <div className={`text-[10px] uppercase tracking-wide ${C.tx3(d)} mb-0.5`}>{l}</div>
-                      <div className={`text-base font-bold ${C.tx(d)}`}>{v}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
+              <Timeline rec={rec} d={d} />
             </div>
             {rec.actualSpent > 0 && (
-              <div className={`rounded-3xl p-5 ${C.card(d)}`}>
-                <p className={`text-xs font-bold uppercase tracking-wider ${C.tx3(d)} mb-3`}>結算結果</p>
-                <div className="flex flex-col gap-2">
-                  {[
-                    { l: "實際花費", v: fmt(rec.actualSpent) },
-                    { l: rec.iOwe ? "需繳回公司" : "公司補我", v: fmt(rec.absDiff) },
-                    rec.remaining > 0 && { l: "剩餘未處理", v: fmt(rec.remaining) },
-                  ].filter(Boolean).map(({ l, v }) => (
-                    <div key={l} className={`rounded-2xl p-3 ${C.card2(d)}`}>
-                      <div className={`text-[10px] uppercase tracking-wide ${C.tx3(d)} mb-0.5`}>{l}</div>
-                      <div className={`text-base font-bold ${C.tx(d)}`}>{v}</div>
-                    </div>
-                  ))}
-                </div>
+              <div className="grid grid-cols-3 gap-3">
+                {[
+                  { l: "欠款總額", v: fmt(rec.actualSpent) },
+                  { l: rec.iOwe ? "需繳回" : "公司已還", v: fmt(rec.absDiff) },
+                  { l: "剩餘", v: fmt(rec.remaining) },
+                ].map(({ l, v }) => (
+                  <div key={l} className={`rounded-2xl p-3.5 ${C.card(d)}`}>
+                    <div className={`text-xs ${C.tx3(d)} mb-1`}>{l}</div>
+                    <div className={`text-lg font-bold ${C.tx(d)}`}>{v}</div>
+                  </div>
+                ))}
               </div>
             )}
           </div>
