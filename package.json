@@ -1,89 +1,25 @@
-import { KIND, ADV, STAGE } from "./constants.js";
-import { toN, clamp } from "./records.js";
-
-/**
- * computeStage — determine the lifecycle stage of an approved advance.
- *
- * Settled (DONE) only when:
- *   - diff is exactly 0 (perfectly balanced, nothing to settle), OR
- *   - the outstanding amount (absDiff) has been fully paid back
- *     via paymentRecords — regardless of direction (company→me or me→company)
- *
- * iOwe only affects WHO owes WHOM, not WHETHER it's settled.
- */
-export const computeStage = (raw) => {
-  if (!toN(raw.actualSpent)) return STAGE.WAITING;
-
-  const advRec  = toN(raw.advanceReceived);
-  const diff    = advRec - toN(raw.actualSpent);
-  const absDiff = Math.abs(diff);
-  const paid    = (raw.paymentRecords || []).reduce((s, r) => s + toN(r.amount), 0);
-
-  return (absDiff === 0 || paid >= absDiff)
-    ? STAGE.DONE
-    : STAGE.SETTLING;
-};
-
-/**
- * derive — add computed/display fields on top of a stored raw record.
- *
- * Input:  plain object from DB / localStorage
- * Output: enriched record with: pr, paid, effectiveKind, remaining,
- *         absDiff, iOwe, diff, stage, status
- */
-export const derive = (raw) => {
-  const pr   = raw.paymentRecords ?? [];
-  const paid = pr.reduce((s, r) => s + toN(r.amount), 0);
-
-  // Rejected advance behaves identically to a plain reimbursement
-  const isR = raw.kind === KIND.R || raw.advStatus === ADV.REJECTED;
-
-  if (isR) {
-    const rem = clamp(toN(raw.amount) - paid);
-    return {
-      ...raw,
-      pr, paid,
-      effectiveKind: KIND.R,
-      remaining: rem,
-      absDiff:   0,
-      iOwe:      false,
-      diff:      0,
-      status:    rem === 0 ? "完成" : "處理中",
-    };
+{
+  "name": "haiback",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "@supabase/supabase-js": "^2.45.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.1",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.47",
+    "tailwindcss": "^3.4.14",
+    "vite": "^5.4.10",
+    "vite-plugin-pwa": "^0.20.5",
+    "workbox-window": "^7.1.0"
   }
-
-  // Advance — still pending approval
-  if (raw.advStatus === ADV.PENDING) {
-    return {
-      ...raw,
-      pr, paid,
-      effectiveKind: KIND.A,
-      stage:         null,
-      remaining:     0,
-      absDiff:       0,
-      iOwe:          false,
-      diff:          0,
-      status:        "等待核准",
-    };
-  }
-
-  // Advance — approved, full lifecycle
-  const stage   = computeStage(raw);
-  const advRec  = toN(raw.advanceReceived);
-  const diff    = advRec - toN(raw.actualSpent);
-  const absDiff = Math.abs(diff);
-  const iOwe    = advRec > 0 && diff > 0;
-  const rem     = clamp(absDiff - paid);
-
-  return {
-    ...raw,
-    pr, paid,
-    effectiveKind: KIND.A,
-    stage,
-    diff,
-    absDiff,
-    iOwe,
-    remaining: stage === STAGE.DONE ? 0 : rem,
-    status:    stage === STAGE.DONE ? "完成" : "處理中",
-  };
-};
+}

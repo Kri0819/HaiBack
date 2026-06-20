@@ -367,8 +367,8 @@ function Timeline({ rec, compact = false, d }) {
   );
 
   const labels = hasAdv
-    ? ["預支建立", rec.advanceReceived > 0 ? `預支金額 ${fmt(rec.advanceReceived)}` : "預支金額", rec.actualSpent > 0 ? `實際花費 ${fmt(rec.actualSpent)}` : "填寫實際花費", "結算中", "已結清"]
-    : ["預支建立", rec.actualSpent > 0 ? `實際花費 ${fmt(rec.actualSpent)}` : "填寫實際花費", rec.stage === STAGE.DONE ? "補款完成" : "公司補款", "已完成"];
+    ? ["款項建立", rec.advanceReceived > 0 ? `預支金額 ${fmt(rec.advanceReceived)}` : "預支金額", rec.actualSpent > 0 ? `實際花費 ${fmt(rec.actualSpent)}` : "填寫實際花費", "結算中", "已結清"]
+    : ["款項建立", rec.actualSpent > 0 ? `實際花費 ${fmt(rec.actualSpent)}` : "填寫實際花費", rec.stage === STAGE.DONE ? "補款完成" : "公司補款", "已完成"];
 
   return (
     <div className="flex flex-col">
@@ -517,7 +517,7 @@ function RecordSheet({ initial, onSave, onClose, user, d }) {
   };
 
   const save = () => {
-    if (!form.title.trim()) return alert("請輸入標題");
+    if (!form.title.trim()) return alert("請輸入欠款名稱");
     if (form.amount === "" || form.amount === null) return alert("請輸入金額");
 
     onSave(buildRaw({
@@ -547,7 +547,7 @@ function RecordSheet({ initial, onSave, onClose, user, d }) {
         {/* ── Step 1: title + date + kind toggle ── */}
         {step === 1 && !isEdit && (
           <>
-            <Field label="標題" d={d}>
+            <Field label="欠款名稱" d={d}>
               <Input d={d} placeholder="e.g. 五月出差費用"
                 value={form.title} onChange={e => set("title", e.target.value)} />
             </Field>
@@ -571,7 +571,7 @@ function RecordSheet({ initial, onSave, onClose, user, d }) {
               </div>
             </Field>
 
-            <PBtn d={d} onClick={() => { if (!form.title.trim()) return alert("請輸入標題"); setStep(2); }}>
+            <PBtn d={d} onClick={() => { if (!form.title.trim()) return alert("請輸入欠款名稱"); setStep(2); }}>
               下一步 →
             </PBtn>
           </>
@@ -582,7 +582,7 @@ function RecordSheet({ initial, onSave, onClose, user, d }) {
           <>
             {isEdit && (
               <>
-                <Field label="標題" d={d}>
+                <Field label="欠款名稱" d={d}>
                   <Input d={d} value={form.title} onChange={e => set("title", e.target.value)} />
                 </Field>
                 <Field label="日期" d={d}>
@@ -600,14 +600,14 @@ function RecordSheet({ initial, onSave, onClose, user, d }) {
               </Field>
             )}
 
-            {/* 需結算：預算金額 + 預支金額（可空） */}
+            {/* 需結算：核定金額 + 預支金額（可空） */}
             {kind === "advance" && (
               <>
-                <Field label="預算金額 ($)" hint="活動的總預算金額" d={d}>
+                <Field label="核定金額 ($)" hint="此項欠款的總金額" d={d}>
                   <Input d={d} type="number" placeholder="0" autoFocus={!isEdit}
                     value={form.amount} onChange={e => set("amount", e.target.value)} />
                 </Field>
-                <Field label="預支金額 ($)" hint="實際拿到的預支款（未領可填 0）" d={d}>
+                <Field label="預支金額 ($)" hint="此項欠款的預支金額（未領可填 0）" d={d}>
                   <Input d={d} type="number" placeholder="0"
                     value={form.advanceReceived} onChange={e => set("advanceReceived", e.target.value)} />
                 </Field>
@@ -681,7 +681,7 @@ function SettleSheet({ rec, onSave, onClose, d }) {
     <Sheet title="填寫實際花費" onClose={onClose} d={d}>
       <div className="flex flex-col gap-5">
         <div className={`rounded-2xl p-4 flex flex-col gap-1.5 ${C.card2(d)}`}>
-          <SRow d={d} l="預算金額" v={fmt(rec.amount)} />
+          <SRow d={d} l="核定金額" v={fmt(rec.amount)} />
           {advRec > 0 && <SRow d={d} l="預支金額" v={fmt(advRec)} />}
         </div>
         <Field label="實際花費 ($)" d={d}>
@@ -857,11 +857,11 @@ function DetailPage({ recId, records, dispatch, onBack, user, d }) {
         ) : (
           <div className="flex flex-col gap-3 mb-4">
             <div className={`rounded-3xl p-5 ${C.card(d)}`}>
-              <p className={`text-xs font-bold uppercase tracking-wider ${C.tx3(d)} mb-4`}>預支流程</p>
+              <p className={`text-xs font-bold uppercase tracking-wider ${C.tx3(d)} mb-4`}>流程</p>
               <div className="flex gap-5">
                 <div className="shrink-0"><Timeline rec={rec} d={d} /></div>
                 <div className="flex flex-col gap-2 flex-1">
-                  {[{ l: "預算金額", v: fmt(rec.amount) }, toN(rec.advanceReceived) > 0 && { l: "預支金額", v: fmt(rec.advanceReceived) }].filter(Boolean).map(({ l, v }) => (
+                  {[{ l: "核定金額", v: fmt(rec.amount) }, toN(rec.advanceReceived) > 0 && { l: "預支金額", v: fmt(rec.advanceReceived) }].filter(Boolean).map(({ l, v }) => (
                     <div key={l} className={`rounded-2xl p-3 ${C.card2(d)}`}>
                       <div className={`text-[10px] uppercase tracking-wide ${C.tx3(d)} mb-0.5`}>{l}</div>
                       <div className={`text-base font-bold ${C.tx(d)}`}>{v}</div>
@@ -1141,7 +1141,7 @@ function MainApp() {
               </div>
               <div>
                 <div className={`text-base font-bold leading-tight ${C.tx(d)}`}>HaiBack｜還袂</div>
-                <div className={`text-[11px] leading-none ${C.tx3(d)}`}>記帳不是麻煩，只是還沒被整理好。</div>
+                <div className={`text-[11px] leading-none ${C.tx3(d)}`}>你這裡欠我的，用什麼還？</div>
               </div>
             </div>
             <button onClick={() => setSheet(user ? "account" : "login")}
@@ -1223,13 +1223,13 @@ function MainApp() {
           ) : filtered.length === 0 ? (
             <div className="text-center py-24">
               <div className="text-5xl mb-4">📋</div>
-              <div className={`text-sm font-semibold ${C.tx2(d)} mb-1`}>{search || hasFilter ? "沒有符合的紀錄" : "你這裡欠我的，用什麼還？"}</div>
+              <div className={`text-sm font-semibold ${C.tx2(d)} mb-1`}>{search || hasFilter ? "沒有符合的紀錄" : "記帳不是麻煩，只是還沒被整理好。"}</div>
               {!search && !hasFilter && <p className={`text-xs ${C.tx3(d)}`}>點右下角 + 開始記帳</p>}
             </div>
           ) : filtered.length === 0 ? (
             <div className="text-center py-24">
               <div className="text-5xl mb-4">📋</div>
-              <div className={`text-sm font-semibold ${C.tx2(d)} mb-1`}>{search || hasFilter ? "沒有符合的紀錄" : "你這裡欠我的，用什麼還？"}</div>
+              <div className={`text-sm font-semibold ${C.tx2(d)} mb-1`}>{search || hasFilter ? "沒有符合的紀錄" : "記帳不是麻煩，只是還沒被整理好。"}</div>
               {!search && !hasFilter && <p className={`text-xs ${C.tx3(d)}`}>點右下角 + 開始記帳</p>}
             </div>
           ) : (
