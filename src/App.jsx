@@ -17,6 +17,7 @@ import { recordsReducer, RECORDS_ACTION } from "./store/recordsReducer_v1.js";
 import {
   getTheme, saveTheme,
   getGuestDismissed, setGuestDismissed,
+  loadRecords, saveRecords,
 } from "./services/storage_v1.js";
 
 // ── PASTE YOUR SUPABASE CREDENTIALS HERE ─────────────────────
@@ -438,7 +439,7 @@ function AccountSheet({ user, onLogout, onClose, d }) {
         </div>
 
         <p className={`text-center text-xs pt-2 pb-1 ${d ? "text-zinc-600" : "text-zinc-400"}`}>
-          HaiBack｜還袂<br/>Version 1.0.0
+          HaiBack｜還袂<br/>Version 1.0.1
         </p>
       </div>
     </Sheet>
@@ -1126,14 +1127,26 @@ function MainApp() {
     // Subscribe to login/logout events
     const sub = auth.onAuthChange((u) => {
       setUser(u);
-      if (!u) dispatchRecords({ type: RECORDS_ACTION.LOAD_RECORDS, payload: [] });
+      if (!u) {
+        // Logged out → restore guest cache instead of wiping the screen blank
+        const cached = loadRecords();
+        dispatchRecords({ type: RECORDS_ACTION.LOAD_RECORDS, payload: cached.map(derive) });
+      }
     });
     return () => sub.unsubscribe();
   }, []);
 
   // ── Load records when user changes ────────────────────────
   useEffect(() => {
-    if (!user) return;
+    if (!user) {
+      // Guest mode: load from localStorage instead of Supabase
+      const cached = loadRecords();
+      dispatchRecords({
+        type: RECORDS_ACTION.LOAD_RECORDS,
+        payload: cached.map(derive),
+      });
+      return;
+    }
     setLoadingRec(true);
     db.load()
       .then((raws) => {
@@ -1155,7 +1168,18 @@ function MainApp() {
     // Optimistic local update first
     dispatchRecords(action);
 
-    // Async cloud sync — alert user if it fails (don't fail silently)
+    // Clear selected detail view on delete, regardless of guest/logged-in mode
+    if (action.type === RECORDS_ACTION.DELETE_RECORD) {
+      setSelId(null);
+    }
+
+    if (!user) {
+      // Guest mode: no cloud sync needed here —
+      // the useEffect below persists `records` to localStorage on every change.
+      return;
+    }
+
+    // Logged in: async cloud sync — alert user if it fails (don't fail silently)
     const onSyncFail = (e) => {
       console.warn("sync error:", e.message);
       alert("⚠️ 雲端同步失敗，這筆紀錄可能只存在本機：\n" + e.message);
@@ -1166,10 +1190,15 @@ function MainApp() {
     } else if (action.type === RECORDS_ACTION.UPDATE_RECORD) {
       db.upsert(strip(action.payload)).catch(onSyncFail);
     } else if (action.type === RECORDS_ACTION.DELETE_RECORD) {
-      setSelId(null);
       db.delete(action.payload).catch(onSyncFail);
     }
-  }, []);
+  }, [user]);
+
+  // ── Guest mode persistence: mirror records to localStorage on every change ──
+  useEffect(() => {
+    if (user) return; // logged-in users rely on Supabase, not this cache
+    saveRecords(records.map(strip));
+  }, [records, user]);
 
 
   const login  = (u) => { setUser(u); setSheet(null); };
