@@ -23,6 +23,7 @@ export const strip = (r) => ({
   actualSpent:     toN(r.actualSpent),
   settlementDate:  r.settlementDate  || "",
   paymentRecords:  r.paymentRecords  || [],
+  tags:            r.tags            || [],
 });
 
 /**
@@ -43,4 +44,5 @@ export const buildRaw = (f, userId = null) => ({
   actualSpent:     toN(f.actualSpent),
   settlementDate:  f.settlementDate  || "",
   paymentRecords:  f.paymentRecords  || [],
+  tags:            f.tags            || [],
 });

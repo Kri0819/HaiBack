@@ -18,6 +18,7 @@ import {
   getTheme, saveTheme,
   getGuestDismissed, setGuestDismissed,
   loadRecords, saveRecords,
+  getTagList, saveTagList,
 } from "./services/storage_v1.js";
 
 // ── PASTE YOUR SUPABASE CREDENTIALS HERE ─────────────────────
@@ -64,9 +65,15 @@ const auth = {
    * SIGNED_IN:       fresh login (Google callback or magic link)
    * TOKEN_REFRESHED: session renewed automatically
    * SIGNED_OUT:      logout
+   *
+   * On SIGNED_IN, also migrates any guest-mode local records into
+   * Supabase in the background — the UI unlocks immediately (cb(user)
+   * fires first), migration happens after via setTimeout so it never
+   * blocks rendering. Migration is best-effort: failures are logged,
+   * never thrown, and never block the user from using the app.
    */
-onAuthChange: (cb) => {
-    const { data } = sb.auth.onAuthStateChange(async (event, session) => {
+  onAuthChange: (cb) => {
+    const { data } = sb.auth.onAuthStateChange((event, session) => {
       if (
         event === "SIGNED_IN"       ||
         event === "TOKEN_REFRESHED" ||
@@ -74,53 +81,13 @@ onAuthChange: (cb) => {
       ) {
         const user = session?.user ?? null;
 
-        // 💡 核心安全改動：不管三七二十一，先叫醒 React 解鎖畫面！
+        // Unlock the UI first — never let migration block rendering
         cb(user);
 
-        // ─── 🚀 背景默默搬移，不綁架畫面 ───
         if (event === "SIGNED_IN" && user) {
-          // 用 setTimeout 丟到下一個事件循環，確保完全不卡住 UI
-          setTimeout(async () => {
-            try {
-              const localRaw = localStorage.getItem("hb_record_cache");
-              const localRecords = localRaw ? JSON.parse(localRaw) : [];
-
-              if (Array.isArray(localRecords) && localRecords.length > 0) {
-                console.log("[背景搬移] 發現訪客資料，開始包裝...", localRecords);
-
-                const migratedRecords = localRecords.map(record => ({
-                  id:               record.id,
-                  kind:             record.kind || "reimburse", 
-                  adv_status:       record.advStatus || null, 
-                  title:            record.title,
-                  date:             record.date,
-                  note:             record.note || "",
-                  amount:           Number(record.amount) || 0,
-                  advance_received: Number(record.advance_received) || 0,
-                  actual_spent:     Number(record.actual_spent) || 0,
-                  settlement_date:  record.settlement_date || null,
-                  payment_records:  record.payment_records || [],
-                  user_id:          user.id             
-                }));
-
-                const { error: insertError } = await sb
-                  .from('hb_records') 
-                  .insert(migratedRecords);
-
-                if (insertError) {
-                  console.error("[背景搬移] ❌ Supabase 拒絕寫入，原因：", insertError);
-                  return;
-                }
-
-                console.log("[背景搬移] 🎉 萬歲！成功飛進雲端！");
-                localStorage.setItem("hb_record_cache", JSON.stringify([]));
-              }
-            } catch (e) {
-              console.error("[背景搬移] 噴出未知錯誤：", e);
-            }
-          }, 0);
+          // Defer to next tick so this never competes with the UI update
+          setTimeout(() => migrateGuestRecords(user), 0);
         }
-
       } else if (event === "SIGNED_OUT") {
         cb(null);
       }
@@ -132,6 +99,45 @@ onAuthChange: (cb) => {
 
   displayName: (user) => user?.email?.split("@")[0] ?? "使用者",
 };
+
+/**
+ * migrateGuestRecords — one-time background migration of guest-mode
+ * localStorage records into Supabase after a fresh login.
+ *
+ * Uses the storage_v1 service layer (loadRecords/saveRecords) rather
+ * than touching localStorage directly, per project convention.
+ *
+ * Field mapping note: the local cache stores records via `strip()`
+ * (domain/records.js), which uses camelCase keys (advanceReceived,
+ * actualSpent, settlementDate, paymentRecords) — NOT snake_case.
+ * rawToDbRow() already converts camelCase → snake_case for the DB,
+ * so we reuse it here instead of re-mapping fields by hand.
+ */
+async function migrateGuestRecords(user) {
+  try {
+    const guestRecords = loadRecords(); // camelCase raw records from localStorage
+    if (!Array.isArray(guestRecords) || guestRecords.length === 0) return;
+
+    console.warn(`[migrate] found ${guestRecords.length} guest record(s), migrating to cloud…`);
+
+    const rows = guestRecords.map((r) => ({
+      ...rawToDbRow(r),
+      user_id: user.id,
+    }));
+
+    const { error } = await sb.from("hb_records").insert(rows);
+
+    if (error) {
+      console.error("[migrate] insert failed, guest data left untouched:", error.message);
+      return; // do NOT clear local cache on failure — keep the data safe
+    }
+
+    console.warn("[migrate] success — clearing local guest cache");
+    saveRecords([]); // only clear after confirmed successful insert
+  } catch (e) {
+    console.error("[migrate] unexpected error, guest data left untouched:", e);
+  }
+}
 
 // ── Supabase records helpers ──────────────────────────────────
 const db = {
@@ -173,6 +179,7 @@ const rawToDbRow = (r) => ({
   actual_spent:     r.actualSpent || 0,
   settlement_date:  r.settlementDate || "",
   payment_records:  r.paymentRecords || [],
+  tags:             r.tags || [],
 });
 
 const dbRowToRaw = (row) => ({
@@ -188,6 +195,7 @@ const dbRowToRaw = (row) => ({
   actualSpent:     row.actual_spent     ?? 0,
   settlementDate:  row.settlement_date  ?? "",
   paymentRecords:  row.payment_records  ?? [],
+  tags:            row.tags             ?? [],
 });
 
 // ─── Theme ────────────────────────────────────────────────────
@@ -234,6 +242,9 @@ const C = {
   overlay: () => "bg-black/50 backdrop-blur-sm",
   closeBtn:(d) => d ? "bg-zinc-800 text-zinc-400 hover:bg-zinc-700" : "bg-zinc-100 text-zinc-500 hover:bg-zinc-200",
   sheetBg: (d) => d ? "bg-zinc-900 border-t border-zinc-800" : "bg-white",
+  // Tag pills: dashed/grey when empty, solid when has tags
+  tagEmpty: (d) => d ? "border-dashed border-zinc-700 text-zinc-500" : "border-dashed border-zinc-300 text-zinc-400",
+  tagFilled:(d) => d ? "border-zinc-600 bg-zinc-800 text-zinc-200" : "border-zinc-300 bg-zinc-100 text-zinc-700",
 };
 
 // ─── UI formatting helpers ────────────────────────────────────
@@ -487,7 +498,7 @@ function AccountSheet({ user, onLogout, onClose, d }) {
         </div>
 
         <p className={`text-center text-xs pt-2 pb-1 ${d ? "text-zinc-600" : "text-zinc-400"}`}>
-          HaiBack｜還袂<br/>Version 1.0.1
+          HaiBack｜還袂<br/>Version 1.1.0
         </p>
       </div>
     </Sheet>
@@ -550,8 +561,81 @@ function LoginSheet({ onClose, d }) {
   );
 }
 
-// ─── Record Sheet ─────────────────────────────────────────────
-function RecordSheet({ initial, onSave, onClose, user, d }) {
+// ─── Tag Picker ───────────────────────────────────────────────
+// Lets the user pick from up to 5 self-defined tags, or create new ones
+// inline (capped at 5 total). Tag *names* are a personal UI preference
+// stored locally (storage_v1.getTagList/saveTagList) — not financial
+// data, so they don't need cloud sync.
+const MAX_TAGS = 5;
+
+function TagPicker({ selected, onChange, d }) {
+  const [allTags, setAllTags] = useState(() => getTagList());
+  const [adding, setAdding]   = useState(false);
+  const [newTag, setNewTag]   = useState("");
+
+  const toggle = (tag) => {
+    const next = selected.includes(tag)
+      ? selected.filter(t => t !== tag)
+      : [...selected, tag];
+    onChange(next);
+  };
+
+  const addTag = () => {
+    const t = newTag.trim();
+    if (!t) return setAdding(false);
+    if (allTags.includes(t)) { setNewTag(""); setAdding(false); return; }
+    if (allTags.length >= MAX_TAGS) { alert(`最多只能建立 ${MAX_TAGS} 個標籤`); return; }
+    const next = [...allTags, t];
+    setAllTags(next);
+    saveTagList(next);
+    onChange([...selected, t]);
+    setNewTag("");
+    setAdding(false);
+  };
+
+  return (
+    <Field label="標籤" d={d}>
+      <div className="flex flex-wrap gap-2">
+        {allTags.map(tag => {
+          const on = selected.includes(tag);
+          return (
+            <button key={tag} type="button" onClick={() => toggle(tag)}
+              className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${on ? C.tagFilled(d) : C.tagEmpty(d)}`}>
+              {tag}
+            </button>
+          );
+        })}
+
+        {!adding ? (
+          allTags.length < MAX_TAGS && (
+            <button type="button" onClick={() => setAdding(true)}
+              className={`px-3 py-1.5 rounded-full text-xs font-semibold border border-dashed transition-all ${C.tagEmpty(d)}`}>
+              + 新增標籤
+            </button>
+          )
+        ) : (
+          <div className="flex items-center gap-1.5">
+            <input
+              autoFocus
+              value={newTag}
+              onChange={e => setNewTag(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter") addTag(); if (e.key === "Escape") { setAdding(false); setNewTag(""); } }}
+              onBlur={addTag}
+              placeholder="標籤名稱"
+              maxLength={10}
+              className={`px-3 py-1.5 rounded-full text-xs font-semibold border w-24 focus:outline-none ${C.input(d)}`}
+            />
+          </div>
+        )}
+      </div>
+      {allTags.length === 0 && !adding && (
+        <p className={`text-xs ${C.tx3(d)}`}>還沒有標籤，點「+ 新增標籤」建立第一個（最多 {MAX_TAGS} 個）</p>
+      )}
+    </Field>
+  );
+}
+
+
   const isEdit = !!initial;
 
   // "reimburse" | "advance" — maps directly to KIND.R / KIND.A
@@ -564,6 +648,7 @@ function RecordSheet({ initial, onSave, onClose, user, d }) {
     amount:          initial?.amount          ?? "",
     advanceReceived: initial?.advanceReceived ?? "",
     note:            initial?.note            ?? "",
+    tags:            initial?.tags            ?? [],
   });
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
@@ -677,6 +762,8 @@ function RecordSheet({ initial, onSave, onClose, user, d }) {
                 </p>
               </>
             )}
+
+            <TagPicker d={d} selected={form.tags} onChange={tags => set("tags", tags)} />
 
             <Field label="備註" d={d}>
               <Textarea d={d} rows={2} placeholder="選填"
@@ -826,6 +913,18 @@ function RecordCard({ rec, onSelect, onAction, d }) {
           </div>
           <div className={`font-semibold text-sm leading-snug ${C.tx(d)}`}>{rec.title}</div>
           {rec.note && <div className={`text-xs ${C.tx3(d)} mt-0.5 truncate`}>{rec.note}</div>}
+          <div className="flex items-center gap-1.5 mt-1.5 flex-wrap" onClick={e => e.stopPropagation()}>
+            {(rec.tags && rec.tags.length > 0) ? (
+              rec.tags.map(tag => (
+                <span key={tag} className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${C.tagFilled(d)}`}>{tag}</span>
+              ))
+            ) : (
+              <button onClick={() => onSelect(rec.id)}
+                className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border border-dashed transition-all ${C.tagEmpty(d)}`}>
+                + 新增標籤
+              </button>
+            )}
+          </div>
         </div>
         <StatusPill status={rec.status} d={d} />
       </div>
@@ -1162,8 +1261,10 @@ function MainApp() {
   const [search,     setSearch]     = useState("");
   const [fStatus,    setFStatus]    = useState("處理中");
   const [fKind,      setFKind]      = useState("全部");
+  const [fTag,       setFTag]       = useState("全部");
   const [sort,       setSort]       = useState("date_desc");
   const [guestOk,    setGuestOk]    = useState(() => getGuestDismissed());
+  const [tagList,    setTagList]    = useState(() => getTagList());
 
   // ── Auth: listen for session changes ──────────────────────
   useEffect(() => {
@@ -1254,13 +1355,38 @@ function MainApp() {
 
   const visible = useMemo(() => records, [records]); // Supabase RLS already filters by user
 
+  const filtered = useMemo(() => visible
+    .filter(r => {
+      if (fStatus !== "全部" && r.status !== fStatus) return false;
+      if (fKind !== "全部" && r.kind !== fKind) return false;
+      if (fTag !== "全部") {
+        if (fTag === "__none__") {
+          if (r.tags && r.tags.length > 0) return false;
+        } else if (!r.tags || !r.tags.includes(fTag)) {
+          return false;
+        }
+      }
+      if (search && !r.title.toLowerCase().includes(search.toLowerCase())) return false;
+      return true;
+    })
+    .sort((a, b) => {
+      if (sort === "date_desc")   return b.date.localeCompare(a.date);
+      if (sort === "date_asc")    return a.date.localeCompare(b.date);
+      if (sort === "amount_desc") return toN(b.amount) - toN(a.amount);
+      if (sort === "amount_asc")  return toN(a.amount) - toN(b.amount);
+      return 0;
+    }), [visible, fStatus, fKind, fTag, search, sort]);
+
   const stats = useMemo(() => {
     // ── 欠款總額規則 ──────────────────────────────────────────
     // 只累計「公司欠我」的金額，多筆累加（例：500 + 800 = 1300）
     // 「我欠公司」的金額絕對不扣除，也不列入計算
     // 領取預支金額（STAGE.WAITING 階段）本身不影響此數字，
     // 只有填完實際花費、進入 STAGE.SETTLING 且公司欠我時才計入
-    const owed = visible.reduce((s, r) => {
+    //
+    // 此計算現在套用目前的篩選條件（狀態/類型/標籤/搜尋）：
+    // 例如選「純報銷」分類時，欠款總額只計算純報銷的部分。
+    const owed = filtered.reduce((s, r) => {
       // Case 1: 純報銷款 — 尚未入帳的全額，全部算公司欠我
       if (r.effectiveKind === KIND.R) {
         return s + r.remaining;
@@ -1279,27 +1405,12 @@ function MainApp() {
 
     return {
       owed:    Math.max(owed, 0),
-      pending: visible.filter(r => r.status !== "完成").length,
-      total:   visible.length,
+      pending: filtered.filter(r => r.status !== "完成").length,
+      total:   filtered.length,
     };
-  }, [visible]);
+  }, [filtered]);
 
-  const filtered = useMemo(() => visible
-    .filter(r => {
-      if (fStatus !== "全部" && r.status !== fStatus) return false;
-      if (fKind !== "全部" && r.kind !== fKind) return false;
-      if (search && !r.title.toLowerCase().includes(search.toLowerCase())) return false;
-      return true;
-    })
-    .sort((a, b) => {
-      if (sort === "date_desc")   return b.date.localeCompare(a.date);
-      if (sort === "date_asc")    return a.date.localeCompare(b.date);
-      if (sort === "amount_desc") return toN(b.amount) - toN(a.amount);
-      if (sort === "amount_asc")  return toN(a.amount) - toN(b.amount);
-      return 0;
-    }), [visible, fStatus, fKind, search, sort]);
-
-  const hasFilter = fStatus !== "處理中" || fKind !== "全部" || sort !== "date_desc";
+  const hasFilter = fStatus !== "處理中" || fKind !== "全部" || fTag !== "全部" || sort !== "date_desc";
   const quickRec  = quickId ? records.find(r => r.id === quickId) : null;
   const quickType = (() => {
     if (!quickRec) return null;
@@ -1363,6 +1474,7 @@ function MainApp() {
               {[
                 ["狀態", ["全部","處理中","完成"], fStatus, setFStatus],
                 ["類型", [["全部","全部"],[KIND.R,"純報銷"],[KIND.A,"需結算"]], fKind, setFKind],
+                ["標籤", [["全部","全部"], ...tagList.map(t => [t, t]), ["__none__","無標籤"]], fTag, setFTag],
                 ["排序", [["date_desc","最新"],["date_asc","最舊"],["amount_desc","金額↓"],["amount_asc","金額↑"]], sort, setSort],
               ].map(([label, opts, val, setter]) => (
                 <div key={label} className="flex items-center gap-3 px-3 py-2.5">

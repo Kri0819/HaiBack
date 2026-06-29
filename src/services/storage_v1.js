@@ -20,6 +20,7 @@ const KEYS = {
   THEME:          "hb_theme",
   GUEST_DISMISSED:"hb_guest_ok",
   RECORD_CACHE:   "hb_record_cache",   // reserved for offline cache
+  TAG_LIST:       "hb_tag_list",       // user-defined tag names (max 5)
 };
 
 // ─── Raw accessor (private) ───────────────────────────────────
@@ -67,3 +68,16 @@ export const saveRecords = (rawList) => _set(KEYS.RECORD_CACHE, rawList);
  * clearRecords — wipe the local cache (e.g. on logout).
  */
 export const clearRecords = () => _set(KEYS.RECORD_CACHE, []);
+
+// ─── Tag list (user-defined, max 5) ──────────────────────────
+/**
+ * getTagList — load the user's custom tag names.
+ * @returns {string[]} array of tag names (empty if none defined)
+ */
+export const getTagList = () => _get(KEYS.TAG_LIST, []);
+
+/**
+ * saveTagList — persist the user's custom tag names.
+ * @param {string[]} tags
+ */
+export const saveTagList = (tags) => _set(KEYS.TAG_LIST, tags);
