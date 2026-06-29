@@ -66,13 +66,50 @@ const auth = {
    * SIGNED_OUT:      logout
    */
   onAuthChange: (cb) => {
-    const { data } = sb.auth.onAuthStateChange((event, session) => {
+    const { data } = sb.auth.onAuthStateChange(async (event, session) => {
       if (
         event === "SIGNED_IN"       ||
         event === "TOKEN_REFRESHED" ||
         event === "USER_UPDATED"
       ) {
-        cb(session?.user ?? null);
+        const user = session?.user ?? null;
+
+        // ─── 🚀 核心神秘搬移邏輯開始 ───
+        if (event === "SIGNED_IN" && user) {
+          try {
+            // 1. 讀取本地快取（利用你 storage_v1 裡定義的鍵名）
+            const localRaw = localStorage.getItem("hb_record_cache");
+            const localRecords = localRaw ? JSON.parse(localRaw) : [];
+
+            if (Array.isArray(localRecords) && localRecords.length > 0) {
+              console.log("[Migration] 偵測到訪客舊資料，準備搬移...", localRecords);
+
+              // 2. 將本地資料補上目前登入使用者的 user_id
+              // 同時把 id 設為 undefined 讓 Supabase 自動生成新的 UUID，防止主鍵衝突
+              const migratedRecords = localRecords.map(record => ({
+                ...record,
+                user_id: user.id,
+                id: undefined 
+              }));
+              // 寫入 Supabase (已精準對齊你的資料表名稱 'hb_records')
+              const { error: insertError } = await sb
+                .from('hb_records') 
+                .insert(migratedRecords);
+              if (insertError) {
+              throw insertError;
+              }
+              console.log("[Migration] 成功搬移至雲端！");
+              // 4. 百分之百雲端存入成功，才清空本地快取
+              localStorage.setItem("hb_record_cache", JSON.stringify([]));
+            }
+          } catch (migrateError) {
+            // 萬一網路斷線或資料庫報錯，這裡會攔截，不執行清空，保證使用者登出後資料還在
+            console.error("[Migration] 搬移失敗，資料已安全保留在本地：", migrateError);
+          }
+        }
+        // ─── 🚀 核心神秘搬移邏輯結束 ───
+
+        cb(user);
       } else if (event === "SIGNED_OUT") {
         cb(null);
       }
