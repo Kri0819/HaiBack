@@ -85,12 +85,25 @@ const auth = {
               console.log("[Migration] 偵測到訪客舊資料，準備搬移...", localRecords);
 
               // 2. 將本地資料補上目前登入使用者的 user_id
-              // 同時把 id 設為 undefined 讓 Supabase 自動生成新的 UUID，防止主鍵衝突
-              const migratedRecords = localRecords.map(record => ({
-                ...record,
-                user_id: user.id,
-                id: undefined 
-              }));
+const migratedRecords = localRecords.map(record => {
+  return {
+    // 💡 保留前端原本就生成好的特定欄位
+    id:               record.id,               // 像是 gpk99g5mqlxut 這種客製化文字 ID
+    kind:             record.kind || "reimburse", 
+    adv_status:       record.adv_status || null,
+    title:            record.title,
+    date:             record.date,
+    note:             record.note || "",
+    amount:           Number(record.amount) || 0, // 確保它是數字型態
+    advance_received: Number(record.advance_received) || 0,
+    actual_spent:     Number(record.actual_spent) || 0,
+    settlement_date:  record.settlement_date || null,
+    payment_records:  record.payment_records || [], // jsonb 型態
+    
+    // 💡 核心：牢牢綁定目前的登入用戶 UUID
+    user_id:          user.id             
+  };
+});
               // 寫入 Supabase (已精準對齊你的資料表名稱 'hb_records')
               const { error: insertError } = await sb
                 .from('hb_records') 
