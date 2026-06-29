@@ -74,22 +74,21 @@ const auth = {
       ) {
         const user = session?.user ?? null;
 
-        // ─── 🚀 核心神秘搬移邏輯開始 ───
         if (event === "SIGNED_IN" && user) {
+          // 💡 關鍵改動：一進來立刻先執行 cb(user)，通知 React 把「載入中」關掉！
+          cb(user); 
+
           try {
-            // 1. 讀取本地快取（利用你 storage_v1 裡定義的鍵名）
             const localRaw = localStorage.getItem("hb_record_cache");
             const localRecords = localRaw ? JSON.parse(localRaw) : [];
 
             if (Array.isArray(localRecords) && localRecords.length > 0) {
               console.log("[Migration] 偵測到訪客舊資料，準備搬移...", localRecords);
 
-              // 2. 將本地資料補上目前登入使用者的 user_id
-           const migratedRecords = localRecords.map(record => {
-          return {
-               id:               record.id,
-               kind:             record.kind || "reimburse", 
-                  // ⚡ 修正：把本地的 advStatus 對應到資料庫的 adv_status
+              const migratedRecords = localRecords.map(record => {
+                return {
+                  id:               record.id,
+                  kind:             record.kind || "reimburse", 
                   adv_status:       record.advStatus || null, 
                   title:            record.title,
                   date:             record.date,
@@ -99,29 +98,28 @@ const auth = {
                   actual_spent:     Number(record.actual_spent) || 0,
                   settlement_date:  record.settlement_date || null,
                   payment_records:  record.payment_records || [],
-                  // ⚡ 核心綁定：目前的登入用戶
                   user_id:          user.id             
                 };
               });
-              // 寫入 Supabase (已精準對齊你的資料表名稱 'hb_records')
+
               const { error: insertError } = await sb
                 .from('hb_records') 
                 .insert(migratedRecords);
-              if (insertError) {
-              throw insertError;
-              }
+
+              if (insertError) throw insertError;
+
               console.log("[Migration] 成功搬移至雲端！");
-              // 4. 百分之百雲端存入成功，才清空本地快取
               localStorage.setItem("hb_record_cache", JSON.stringify([]));
             }
           } catch (migrateError) {
-            // 萬一網路斷線或資料庫報錯，這裡會攔截，不執行清空，保證使用者登出後資料還在
-            console.error("[Migration] 搬移失敗，資料已安全保留在本地：", migrateError);
+            console.error("[Migration] 搬移過程有卡住，但已保護流程：", migrateError);
+            // 萬一上面出事，這裡再補確保一次
+            cb(user);
           }
+        } else {
+          // 如果不是 SIGNED_IN（例如只是 TOKEN_REFRESHED），走原本的正常流
+          cb(user);
         }
-        // ─── 🚀 核心神秘搬移邏輯結束 ───
-
-        cb(user);
       } else if (event === "SIGNED_OUT") {
         cb(null);
       }
