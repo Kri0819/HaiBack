@@ -65,14 +65,62 @@ const auth = {
    * TOKEN_REFRESHED: session renewed automatically
    * SIGNED_OUT:      logout
    */
- onAuthChange: (cb) => {
-    const { data } = sb.auth.onAuthStateChange((event, session) => {
+onAuthChange: (cb) => {
+    const { data } = sb.auth.onAuthStateChange(async (event, session) => {
       if (
         event === "SIGNED_IN"       ||
         event === "TOKEN_REFRESHED" ||
         event === "USER_UPDATED"
       ) {
-        cb(session?.user ?? null);
+        const user = session?.user ?? null;
+
+        // 💡 核心安全改動：不管三七二十一，先叫醒 React 解鎖畫面！
+        cb(user);
+
+        // ─── 🚀 背景默默搬移，不綁架畫面 ───
+        if (event === "SIGNED_IN" && user) {
+          // 用 setTimeout 丟到下一個事件循環，確保完全不卡住 UI
+          setTimeout(async () => {
+            try {
+              const localRaw = localStorage.getItem("hb_record_cache");
+              const localRecords = localRaw ? JSON.parse(localRaw) : [];
+
+              if (Array.isArray(localRecords) && localRecords.length > 0) {
+                console.log("[背景搬移] 發現訪客資料，開始包裝...", localRecords);
+
+                const migratedRecords = localRecords.map(record => ({
+                  id:               record.id,
+                  kind:             record.kind || "reimburse", 
+                  adv_status:       record.advStatus || null, 
+                  title:            record.title,
+                  date:             record.date,
+                  note:             record.note || "",
+                  amount:           Number(record.amount) || 0,
+                  advance_received: Number(record.advance_received) || 0,
+                  actual_spent:     Number(record.actual_spent) || 0,
+                  settlement_date:  record.settlement_date || null,
+                  payment_records:  record.payment_records || [],
+                  user_id:          user.id             
+                }));
+
+                const { error: insertError } = await sb
+                  .from('hb_records') 
+                  .insert(migratedRecords);
+
+                if (insertError) {
+                  console.error("[背景搬移] ❌ Supabase 拒絕寫入，原因：", insertError);
+                  return;
+                }
+
+                console.log("[背景搬移] 🎉 萬歲！成功飛進雲端！");
+                localStorage.setItem("hb_record_cache", JSON.stringify([]));
+              }
+            } catch (e) {
+              console.error("[背景搬移] 噴出未知錯誤：", e);
+            }
+          }, 0);
+        }
+
       } else if (event === "SIGNED_OUT") {
         cb(null);
       }
