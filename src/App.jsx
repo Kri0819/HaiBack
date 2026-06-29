@@ -65,61 +65,14 @@ const auth = {
    * TOKEN_REFRESHED: session renewed automatically
    * SIGNED_OUT:      logout
    */
-  onAuthChange: (cb) => {
-    const { data } = sb.auth.onAuthStateChange(async (event, session) => {
+ onAuthChange: (cb) => {
+    const { data } = sb.auth.onAuthStateChange((event, session) => {
       if (
         event === "SIGNED_IN"       ||
         event === "TOKEN_REFRESHED" ||
         event === "USER_UPDATED"
       ) {
-        const user = session?.user ?? null;
-
-        if (event === "SIGNED_IN" && user) {
-          // 💡 關鍵改動：一進來立刻先執行 cb(user)，通知 React 把「載入中」關掉！
-          cb(user); 
-
-          try {
-            const localRaw = localStorage.getItem("hb_record_cache");
-            const localRecords = localRaw ? JSON.parse(localRaw) : [];
-
-            if (Array.isArray(localRecords) && localRecords.length > 0) {
-              console.log("[Migration] 偵測到訪客舊資料，準備搬移...", localRecords);
-
-              const migratedRecords = localRecords.map(record => {
-                return {
-                  id:               record.id,
-                  kind:             record.kind || "reimburse", 
-                  adv_status:       record.advStatus || null, 
-                  title:            record.title,
-                  date:             record.date,
-                  note:             record.note || "",
-                  amount:           Number(record.amount) || 0,
-                  advance_received: Number(record.advance_received) || 0,
-                  actual_spent:     Number(record.actual_spent) || 0,
-                  settlement_date:  record.settlement_date || null,
-                  payment_records:  record.payment_records || [],
-                  user_id:          user.id             
-                };
-              });
-
-              const { error: insertError } = await sb
-                .from('hb_records') 
-                .insert(migratedRecords);
-
-              if (insertError) throw insertError;
-
-              console.log("[Migration] 成功搬移至雲端！");
-              localStorage.setItem("hb_record_cache", JSON.stringify([]));
-            }
-          } catch (migrateError) {
-            console.error("[Migration] 搬移過程有卡住，但已保護流程：", migrateError);
-            // 萬一上面出事，這裡再補確保一次
-            cb(user);
-          }
-        } else {
-          // 如果不是 SIGNED_IN（例如只是 TOKEN_REFRESHED），走原本的正常流
-          cb(user);
-        }
+        cb(session?.user ?? null);
       } else if (event === "SIGNED_OUT") {
         cb(null);
       }
