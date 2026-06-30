@@ -466,10 +466,79 @@ function Timeline({ rec, compact = false, d }) {
 // ─── Account Sheet ────────────────────────────────────────────
 function AccountSheet({ user, onLogout, onClose, d }) {
   const { pref, setPref } = useTheme();
+  const [editingTags, setEditingTags] = useState(false);
+  const [tagList, setTagListState]    = useState(() => getTagList());
+  const [newTag,  setNewTag]          = useState("");
+
   const opts = [
     { k: "light",  l: "淺色模式", ic: I.sun   },
     { k: "dark",   l: "深色模式", ic: I.moon  },
   ];
+
+  const addTag = () => {
+    const t = newTag.trim();
+    if (!t) return;
+    if (tagList.includes(t)) { setNewTag(""); return; }
+    if (tagList.length >= MAX_TAGS) { alert(`最多只能建立 ${MAX_TAGS} 個標籤`); return; }
+    const next = [...tagList, t];
+    setTagListState(next);
+    saveTagList(next);
+    setNewTag("");
+  };
+
+  const removeTag = (tag) => {
+    if (!confirm(`刪除標籤「${tag}」？\n已套用此標籤的紀錄不會被刪除，只會移除標籤。`)) return;
+    const next = tagList.filter(t => t !== tag);
+    setTagListState(next);
+    saveTagList(next);
+  };
+
+  if (editingTags) {
+    return (
+      <Sheet title="編輯標籤" onClose={onClose} d={d}>
+        <div className="flex flex-col gap-6">
+          <button onClick={() => setEditingTags(false)}
+            className={`flex items-center gap-2 text-sm font-medium ${C.tx2(d)} hover:opacity-70 transition-opacity w-fit`}>
+            {I.back} 返回設定
+          </button>
+
+          <div>
+            <SecTitle d={d}>目前的標籤（{tagList.length}/{MAX_TAGS}）</SecTitle>
+            {tagList.length === 0 ? (
+              <p className={`text-xs ${C.tx3(d)}`}>還沒有任何標籤</p>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {tagList.map(tag => (
+                  <div key={tag} className={`flex items-center justify-between px-4 py-3 rounded-2xl ${C.card(d)}`}>
+                    <span className={`text-sm font-semibold ${C.tx(d)}`}>{tag}</span>
+                    <button onClick={() => removeTag(tag)}
+                      className="text-red-500 hover:opacity-70 transition-opacity">
+                      {I.trash}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {tagList.length < MAX_TAGS && (
+            <Field label="新增標籤" d={d}>
+              <div className="flex gap-2">
+                <Input d={d} value={newTag} onChange={e => setNewTag(e.target.value)}
+                  onKeyDown={e => { if (e.key === "Enter") addTag(); }}
+                  placeholder="標籤名稱" maxLength={10} className="flex-1" />
+                <button onClick={addTag}
+                  className={`px-4 rounded-2xl text-sm font-semibold transition-all ${C.btn(d)}`}>
+                  新增
+                </button>
+              </div>
+            </Field>
+          )}
+        </div>
+      </Sheet>
+    );
+  }
+
   return (
     <Sheet title="設定" onClose={onClose} d={d}>
       <div className="flex flex-col gap-6">
@@ -493,12 +562,17 @@ function AccountSheet({ user, onLogout, onClose, d }) {
           </div>
         </div>
         <div>
+          <SecTitle d={d}>標籤</SecTitle>
+          <SettingRow d={d} label="編輯標籤" value={`${tagList.length} 個`} right={I.chevR}
+            onClick={() => setEditingTags(true)} />
+        </div>
+        <div>
           <SecTitle d={d}>其他</SecTitle>
           <SettingRow d={d} label="登出" danger onClick={() => { onLogout(); onClose(); }} />
         </div>
 
         <p className={`text-center text-xs pt-2 pb-1 ${d ? "text-zinc-600" : "text-zinc-400"}`}>
-          HaiBack｜還袂<br/>Version 1.1.3
+          HaiBack｜還袂<br/>Version 1.1.4
         </p>
       </div>
     </Sheet>
@@ -1483,9 +1557,11 @@ function MainApp() {
                   <div className="flex gap-1.5 flex-wrap">
                     {opts.map(o => {
                       const v = Array.isArray(o) ? o[0] : o, l = Array.isArray(o) ? o[1] : o;
+                      const isActive = val === v;
                       return (
                         <button key={v} onClick={() => setter(v)}
-                          className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all border ${val === v ? C.activeFilter(d) : C.inactFilter(d)}`}>
+                          className={`flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all border-2 ${isActive ? C.activeFilter(d) : C.inactFilter(d)}`}>
+                          {isActive && <span className="text-[10px]">✓</span>}
                           {l}
                         </button>
                       );
@@ -1558,7 +1634,7 @@ function MainApp() {
       {/* Sheets */}
       {sheet === "add"     && <RecordSheet d={d} user={user} onSave={f => { dispatch({ type: RECORDS_ACTION.ADD_RECORD, payload: derive(buildRaw(f, user?.id)) }); setSheet(null); }} onClose={() => setSheet(null)} />}
       {sheet === "login"   && <LoginSheet  d={d} onClose={() => setSheet(null)} />}
-      {sheet === "account" && <AccountSheet d={d} user={user} onLogout={logout} onClose={() => setSheet(null)} />}
+      {sheet === "account" && <AccountSheet d={d} user={user} onLogout={logout} onClose={() => { setTagList(getTagList()); setSheet(null); }} />}
       {quickRec && quickType === "status" && <AdvStatusSheet d={d} rec={quickRec} onSave={u => { dispatch({ type: RECORDS_ACTION.UPDATE_RECORD, payload: derive({ ...strip(quickRec), ...u }) }); setQuickId(null); }} onClose={() => setQuickId(null)} />}
       {quickRec && quickType === "settle" && <SettleSheet d={d} rec={quickRec} onSave={({ actualSpent, settlementDate }) => { dispatch({ type: RECORDS_ACTION.UPDATE_RECORD, payload: derive({ ...strip(quickRec), actualSpent, settlementDate }) }); setQuickId(null); }} onClose={() => setQuickId(null)} />}
       {quickRec && quickType === "pay"    && <PaymentSheet d={d} rec={quickRec} onSave={p => { dispatch({ type: RECORDS_ACTION.UPDATE_RECORD, payload: derive({ ...strip(quickRec), paymentRecords: [...quickRec.pr, p] }) }); setQuickId(null); }} onClose={() => setQuickId(null)} />}
