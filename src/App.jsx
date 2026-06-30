@@ -498,7 +498,7 @@ function AccountSheet({ user, onLogout, onClose, d }) {
         </div>
 
         <p className={`text-center text-xs pt-2 pb-1 ${d ? "text-zinc-600" : "text-zinc-400"}`}>
-          HaiBack｜還袂<br/>Version 1.1.1
+          HaiBack｜還袂<br/>Version 1.1.3
         </p>
       </div>
     </Sheet>
@@ -635,7 +635,8 @@ function TagPicker({ selected, onChange, d }) {
   );
 }
 
-
+// ─── Record Sheet ─────────────────────────────────────────────
+function RecordSheet({ initial, onSave, onClose, user, d }) {
   const isEdit = !!initial;
 
   // "reimburse" | "advance" — maps directly to KIND.R / KIND.A
