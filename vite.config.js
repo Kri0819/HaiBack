@@ -7,10 +7,13 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: "autoUpdate",
-      includeAssets: ["icons/*.png", "icons/*.svg"],
-      manifest: false,
+      manifest: false, // using public/manifest.json directly
       workbox: {
-        globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
+        // Let workbox auto-discover build output instead of a manual
+        // glob pattern — manual patterns break the build if no files
+        // match (e.g. public/icons/ being empty).
+        globDirectory: "dist",
+        globPatterns: ["**/*.{js,css,html,ico,svg,woff2}"],
       },
     }),
   ],
