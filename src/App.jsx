@@ -25,6 +25,12 @@ import {
 const SUPABASE_URL  = import.meta.env.VITE_SUPABASE_URL  || "https://YOUR_PROJECT.supabase.co";
 const SUPABASE_ANON = import.meta.env.VITE_SUPABASE_ANON_KEY || "YOUR_ANON_KEY";
 const sb = createClient(SUPABASE_URL, SUPABASE_ANON);
+
+// ── App version — bump this on every release ──────────────────
+// Used to auto-detect stale cached sessions and force a one-time
+// reload, so users never need to manually press Cmd/Ctrl+Shift+R.
+const APP_VERSION = "1.1.6";
+const VERSION_KEY  = "hb_app_version";
 // ─────────────────────────────────────────────────────────────
 
 // ── Supabase auth helpers (Magic Link / Email OTP) ───────────
@@ -627,7 +633,7 @@ function AccountSheet({ user, records, dispatch, onLogout, onClose, d }) {
         </div>
 
         <p className={`text-center text-xs pt-2 pb-1 ${d ? "text-zinc-600" : "text-zinc-400"}`}>
-          HaiBack｜還袂<br/>Version 1.1.5
+          HaiBack｜還袂<br/>Version 1.1.6
         </p>
       </div>
     </Sheet>
@@ -1705,6 +1711,28 @@ function MainApp() {
     </div>
   );
 }
+
+// ── Auto-update: detect stale version and force one silent reload ──
+// Runs once, synchronously, before React mounts. If the version stored
+// in localStorage differs from the version baked into this build,
+// the user is on a stale cached page — reload once to fetch the latest
+// JS bundle (whose filename has a fresh content hash, so it can't be
+// served from cache even if the browser tries).
+(function autoUpdateCheck() {
+  try {
+    const seen = localStorage.getItem(VERSION_KEY);
+    if (seen !== APP_VERSION) {
+      localStorage.setItem(VERSION_KEY, APP_VERSION);
+      if (seen !== null) {
+        // Only force-reload if this isn't the very first visit
+        // (seen === null means brand new user, nothing stale to clear)
+        window.location.reload();
+      }
+    }
+  } catch (e) {
+    // localStorage unavailable (private mode edge cases) — skip silently
+  }
+})();
 
 export default function App() {
   return <ThemeProvider><MainApp /></ThemeProvider>;
