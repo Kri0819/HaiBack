@@ -498,7 +498,7 @@ function AccountSheet({ user, onLogout, onClose, d }) {
         </div>
 
         <p className={`text-center text-xs pt-2 pb-1 ${d ? "text-zinc-600" : "text-zinc-400"}`}>
-          HaiBack｜還袂<br/>Version 1.1.0
+          HaiBack｜還袂<br/>Version 1.1.1
         </p>
       </div>
     </Sheet>
