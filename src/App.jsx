@@ -245,6 +245,8 @@ const C = {
   // Tag pills: dashed/grey when empty, solid when has tags
   tagEmpty: (d) => d ? "border-dashed border-zinc-700 text-zinc-500" : "border-dashed border-zinc-300 text-zinc-400",
   tagFilled:(d) => d ? "border-zinc-600 bg-zinc-800 text-zinc-200" : "border-zinc-300 bg-zinc-100 text-zinc-700",
+  // Unselected-but-existing tag: solid outline, no fill (used in TagPicker form, distinct from tagEmpty which is the dashed "+新增" placeholder)
+  tagUnselected: (d) => d ? "border-zinc-700 text-zinc-400 bg-transparent" : "border-zinc-300 text-zinc-500 bg-transparent",
 };
 
 // ─── UI formatting helpers ────────────────────────────────────
@@ -464,11 +466,13 @@ function Timeline({ rec, compact = false, d }) {
 }
 
 // ─── Account Sheet ────────────────────────────────────────────
-function AccountSheet({ user, onLogout, onClose, d }) {
+function AccountSheet({ user, records, dispatch, onLogout, onClose, d }) {
   const { pref, setPref } = useTheme();
   const [editingTags, setEditingTags] = useState(false);
   const [tagList, setTagListState]    = useState(() => getTagList());
   const [newTag,  setNewTag]          = useState("");
+  const [renamingTag, setRenamingTag] = useState(null); // tag name currently being renamed
+  const [renameInput, setRenameInput] = useState("");
 
   const opts = [
     { k: "light",  l: "淺色模式", ic: I.sun   },
@@ -491,6 +495,39 @@ function AccountSheet({ user, onLogout, onClose, d }) {
     const next = tagList.filter(t => t !== tag);
     setTagListState(next);
     saveTagList(next);
+    // Also remove this tag from any records that have it
+    records.forEach(r => {
+      if (r.tags && r.tags.includes(tag)) {
+        dispatch({
+          type: RECORDS_ACTION.UPDATE_RECORD,
+          payload: derive({ ...strip(r), tags: r.tags.filter(t => t !== tag) }),
+        });
+      }
+    });
+  };
+
+  const startRename = (tag) => { setRenamingTag(tag); setRenameInput(tag); };
+
+  const confirmRename = () => {
+    const newName = renameInput.trim();
+    if (!newName || newName === renamingTag) { setRenamingTag(null); return; }
+    if (tagList.includes(newName)) { alert("已有相同名稱的標籤"); return; }
+
+    const next = tagList.map(t => t === renamingTag ? newName : t);
+    setTagListState(next);
+    saveTagList(next);
+
+    // Propagate the rename to every record that has the old tag name
+    records.forEach(r => {
+      if (r.tags && r.tags.includes(renamingTag)) {
+        dispatch({
+          type: RECORDS_ACTION.UPDATE_RECORD,
+          payload: derive({ ...strip(r), tags: r.tags.map(t => t === renamingTag ? newName : t) }),
+        });
+      }
+    });
+
+    setRenamingTag(null);
   };
 
   if (editingTags) {
@@ -509,12 +546,30 @@ function AccountSheet({ user, onLogout, onClose, d }) {
             ) : (
               <div className="flex flex-col gap-2">
                 {tagList.map(tag => (
-                  <div key={tag} className={`flex items-center justify-between px-4 py-3 rounded-2xl ${C.card(d)}`}>
-                    <span className={`text-sm font-semibold ${C.tx(d)}`}>{tag}</span>
-                    <button onClick={() => removeTag(tag)}
-                      className="text-red-500 hover:opacity-70 transition-opacity">
-                      {I.trash}
-                    </button>
+                  <div key={tag} className={`flex items-center justify-between gap-2 px-4 py-3 rounded-2xl ${C.card(d)}`}>
+                    {renamingTag === tag ? (
+                      <input
+                        autoFocus
+                        value={renameInput}
+                        onChange={e => setRenameInput(e.target.value)}
+                        onKeyDown={e => { if (e.key === "Enter") confirmRename(); if (e.key === "Escape") setRenamingTag(null); }}
+                        onBlur={confirmRename}
+                        maxLength={10}
+                        className={`flex-1 text-sm font-semibold bg-transparent focus:outline-none border-b ${d ? "border-zinc-600 text-zinc-100" : "border-zinc-300 text-zinc-900"}`}
+                      />
+                    ) : (
+                      <span className={`text-sm font-semibold ${C.tx(d)}`}>{tag}</span>
+                    )}
+                    <div className="flex items-center gap-3 shrink-0">
+                      <button onClick={() => startRename(tag)}
+                        className={`${C.tx3(d)} hover:opacity-70 transition-opacity`}>
+                        {I.edit}
+                      </button>
+                      <button onClick={() => removeTag(tag)}
+                        className="text-red-500 hover:opacity-70 transition-opacity">
+                        {I.trash}
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -572,7 +627,7 @@ function AccountSheet({ user, onLogout, onClose, d }) {
         </div>
 
         <p className={`text-center text-xs pt-2 pb-1 ${d ? "text-zinc-600" : "text-zinc-400"}`}>
-          HaiBack｜還袂<br/>Version 1.1.4
+          HaiBack｜還袂<br/>Version 1.1.5
         </p>
       </div>
     </Sheet>
@@ -674,7 +729,7 @@ function TagPicker({ selected, onChange, d }) {
           const on = selected.includes(tag);
           return (
             <button key={tag} type="button" onClick={() => toggle(tag)}
-              className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${on ? C.tagFilled(d) : C.tagEmpty(d)}`}>
+              className={`px-3 py-1.5 rounded-full text-xs font-semibold border-2 transition-all ${on ? C.tagFilled(d) : C.tagUnselected(d)}`}>
               {tag}
             </button>
           );
@@ -986,20 +1041,22 @@ function RecordCard({ rec, onSelect, onAction, d }) {
             <KindPill rec={rec} d={d} />
             <span className={`text-xs ${C.tx3(d)}`}>{fmtD(rec.date)}</span>
           </div>
-          <div className={`font-semibold text-sm leading-snug ${C.tx(d)}`}>{rec.title}</div>
-          {rec.note && <div className={`text-xs ${C.tx3(d)} mt-0.5 truncate`}>{rec.note}</div>}
-          <div className="flex items-center gap-1.5 mt-1.5 flex-wrap" onClick={e => e.stopPropagation()}>
-            {(rec.tags && rec.tags.length > 0) ? (
-              rec.tags.map(tag => (
-                <span key={tag} className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${C.tagFilled(d)}`}>{tag}</span>
-              ))
-            ) : (
-              <button onClick={() => onSelect(rec.id)}
-                className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border border-dashed transition-all ${C.tagEmpty(d)}`}>
-                + 新增標籤
-              </button>
-            )}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <div className={`font-semibold text-sm leading-snug ${C.tx(d)}`}>{rec.title}</div>
+            <div onClick={e => e.stopPropagation()} className="flex items-center gap-1 flex-wrap">
+              {(rec.tags && rec.tags.length > 0) ? (
+                rec.tags.map(tag => (
+                  <span key={tag} className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${C.tagFilled(d)}`}>{tag}</span>
+                ))
+              ) : (
+                <button onClick={() => onSelect(rec.id)}
+                  className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border border-dashed transition-all ${C.tagEmpty(d)}`}>
+                  + 新增標籤
+                </button>
+              )}
+            </div>
           </div>
+          {rec.note && <div className={`text-xs ${C.tx3(d)} mt-0.5 truncate`}>{rec.note}</div>}
         </div>
         <StatusPill status={rec.status} d={d} />
       </div>
@@ -1100,8 +1157,16 @@ function DetailPage({ recId, records, dispatch, onBack, user, d }) {
 
         {/* Title card */}
         <div className={`rounded-3xl p-5 mb-4 shadow-sm ${C.card(d)}`}>
-          <div className="flex items-center gap-2 mb-3 flex-wrap"><KindPill rec={rec} d={d}/><StatusPill status={rec.status} d={d}/></div>
-          <h1 className={`text-2xl font-bold leading-tight mb-2 ${C.tx(d)}`}>{rec.title}</h1>
+          <div className="flex items-start justify-between gap-2 mb-2">
+            <KindPill rec={rec} d={d}/>
+            <StatusPill status={rec.status} d={d}/>
+          </div>
+          <div className="flex items-center gap-1.5 flex-wrap mb-2">
+            <h1 className={`text-2xl font-bold leading-tight ${C.tx(d)}`}>{rec.title}</h1>
+            {rec.tags && rec.tags.length > 0 && rec.tags.map(tag => (
+              <span key={tag} className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${C.tagFilled(d)}`}>{tag}</span>
+            ))}
+          </div>
           <div className={`flex items-center gap-1.5 text-xs ${C.tx3(d)}`}>{I.clock} {fmtD(rec.date)}</div>
           {rec.note && <p className={`mt-3 pt-3 border-t ${C.border(d)} text-sm ${C.tx2(d)}`}>{rec.note}</p>}
         </div>
@@ -1560,8 +1625,7 @@ function MainApp() {
                       const isActive = val === v;
                       return (
                         <button key={v} onClick={() => setter(v)}
-                          className={`flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all border-2 ${isActive ? C.activeFilter(d) : C.inactFilter(d)}`}>
-                          {isActive && <span className="text-[10px]">✓</span>}
+                          className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all border-2 ${isActive ? C.activeFilter(d) : C.inactFilter(d)}`}>
                           {l}
                         </button>
                       );
@@ -1634,7 +1698,7 @@ function MainApp() {
       {/* Sheets */}
       {sheet === "add"     && <RecordSheet d={d} user={user} onSave={f => { dispatch({ type: RECORDS_ACTION.ADD_RECORD, payload: derive(buildRaw(f, user?.id)) }); setSheet(null); }} onClose={() => setSheet(null)} />}
       {sheet === "login"   && <LoginSheet  d={d} onClose={() => setSheet(null)} />}
-      {sheet === "account" && <AccountSheet d={d} user={user} onLogout={logout} onClose={() => { setTagList(getTagList()); setSheet(null); }} />}
+      {sheet === "account" && <AccountSheet d={d} user={user} records={records} dispatch={dispatch} onLogout={logout} onClose={() => { setTagList(getTagList()); setSheet(null); }} />}
       {quickRec && quickType === "status" && <AdvStatusSheet d={d} rec={quickRec} onSave={u => { dispatch({ type: RECORDS_ACTION.UPDATE_RECORD, payload: derive({ ...strip(quickRec), ...u }) }); setQuickId(null); }} onClose={() => setQuickId(null)} />}
       {quickRec && quickType === "settle" && <SettleSheet d={d} rec={quickRec} onSave={({ actualSpent, settlementDate }) => { dispatch({ type: RECORDS_ACTION.UPDATE_RECORD, payload: derive({ ...strip(quickRec), actualSpent, settlementDate }) }); setQuickId(null); }} onClose={() => setQuickId(null)} />}
       {quickRec && quickType === "pay"    && <PaymentSheet d={d} rec={quickRec} onSave={p => { dispatch({ type: RECORDS_ACTION.UPDATE_RECORD, payload: derive({ ...strip(quickRec), paymentRecords: [...quickRec.pr, p] }) }); setQuickId(null); }} onClose={() => setQuickId(null)} />}
