@@ -19,6 +19,8 @@ import {
   getGuestDismissed, setGuestDismissed,
   loadRecords, saveRecords,
   getTagList, saveTagList,
+  ensureFirstVisit, daysSinceFirstVisit,
+  getLoginReminderShown, setLoginReminderShown,
 } from "./services/storage_v1.js";
 
 // ── PASTE YOUR SUPABASE CREDENTIALS HERE ─────────────────────
@@ -29,7 +31,7 @@ const sb = createClient(SUPABASE_URL, SUPABASE_ANON);
 // ── App version — bump this on every release ──────────────────
 // Used to auto-detect stale cached sessions and force a one-time
 // reload, so users never need to manually press Cmd/Ctrl+Shift+R.
-const APP_VERSION = "1.1.6";
+const APP_VERSION = "1.2.0";
 const VERSION_KEY  = "hb_app_version";
 // ─────────────────────────────────────────────────────────────
 
@@ -633,7 +635,7 @@ function AccountSheet({ user, records, dispatch, onLogout, onClose, d }) {
         </div>
 
         <p className={`text-center text-xs pt-2 pb-1 ${d ? "text-zinc-600" : "text-zinc-400"}`}>
-          HaiBack｜還袂<br/>Version 1.1.6
+          HaiBack｜還袂<br/>Version 1.2.0
         </p>
       </div>
     </Sheet>
@@ -1395,6 +1397,42 @@ function DetailPage({ recId, records, dispatch, onBack, user, d }) {
 }
 
 // ─── Main App ─────────────────────────────────────────────────
+// ─── Login Reminder Modal ─────────────────────────────────────
+function LoginReminderModal({ onLogin, onDismiss, d }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center px-5">
+      {/* Backdrop */}
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onDismiss} />
+
+      {/* Modal card */}
+      <div className={`relative w-full max-w-sm rounded-3xl shadow-2xl p-6 flex flex-col gap-4 ${d ? "bg-zinc-900" : "bg-white"}`}>
+        {/* Close */}
+        <button onClick={onDismiss}
+          className={`absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-full text-xl transition-colors ${d ? "bg-zinc-800 text-zinc-400 hover:bg-zinc-700" : "bg-zinc-100 text-zinc-500 hover:bg-zinc-200"}`}>
+          ×
+        </button>
+
+        {/* Content */}
+        <div className="flex flex-col gap-3 pr-6">
+          <div className={`text-lg font-bold ${C.tx(d)}`}>🔒 保護你的紀錄</div>
+          <p className={`text-sm leading-relaxed ${C.tx2(d)}`}>
+            HaiBack 已開始累積你的報銷紀錄。<br/>
+            登入 Google 帳號後，<br/>
+            資料將自動同步至雲端，<br/>
+            即使更換裝置或清除瀏覽資料，也不用擔心資料遺失。
+          </p>
+        </div>
+
+        {/* CTA */}
+        <button onClick={onLogin}
+          className={`w-full py-4 rounded-2xl font-semibold text-sm active:scale-[0.98] transition-all ${d ? "bg-white text-zinc-900 hover:bg-zinc-100" : "bg-zinc-900 text-white hover:bg-zinc-800"}`}>
+          立即登入
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function MainApp() {
   const { dark: d } = useTheme();
   const [records,    dispatchRecords] = useReducer(recordsReducer, []);
@@ -1409,8 +1447,9 @@ function MainApp() {
   const [fKind,      setFKind]      = useState("全部");
   const [fTag,       setFTag]       = useState("全部");
   const [sort,       setSort]       = useState("date_desc");
-  const [guestOk,    setGuestOk]    = useState(() => getGuestDismissed());
-  const [tagList,    setTagList]    = useState(() => getTagList());
+  const [guestOk,       setGuestOk]       = useState(() => getGuestDismissed());
+  const [tagList,       setTagList]       = useState(() => getTagList());
+  const [showLoginReminder, setShowLoginReminder] = useState(false);
 
   // ── Auth: listen for session changes ──────────────────────
   useEffect(() => {
@@ -1430,6 +1469,25 @@ function MainApp() {
     });
     return () => sub.unsubscribe();
   }, []);
+
+  // ── First-visit date tracking (guest only) ────────────────
+  useEffect(() => {
+    if (!user) ensureFirstVisit();
+  }, [user]);
+
+  // ── Login reminder trigger ─────────────────────────────────
+  // Fires once when records are loaded in guest mode.
+  // Conditions: not logged in + not shown yet + (≥5 records OR ≥3 days since first visit)
+  useEffect(() => {
+    if (user) return;                        // logged in — never show
+    if (getLoginReminderShown()) return;     // already shown once — never show again
+
+    const records5    = records.length >= 5;
+    const days3       = daysSinceFirstVisit() >= 3;
+    if (records5 || days3) {
+      setShowLoginReminder(true);
+    }
+  }, [records, user]);
 
   // ── Load records when user changes ────────────────────────
   useEffect(() => {
@@ -1693,6 +1751,22 @@ function MainApp() {
           )}
         </div>
       </div>
+
+      {/* Login Reminder Modal */}
+      {showLoginReminder && (
+        <LoginReminderModal
+          d={d}
+          onDismiss={() => {
+            setLoginReminderShown();
+            setShowLoginReminder(false);
+          }}
+          onLogin={() => {
+            setLoginReminderShown();
+            setShowLoginReminder(false);
+            setSheet("login");
+          }}
+        />
+      )}
 
       {/* FAB */}
       <button onClick={() => setSheet("add")}

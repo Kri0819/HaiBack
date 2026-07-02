@@ -17,10 +17,12 @@
 
 // ─── All localStorage keys in one place ──────────────────────
 const KEYS = {
-  THEME:          "hb_theme",
-  GUEST_DISMISSED:"hb_guest_ok",
-  RECORD_CACHE:   "hb_record_cache",   // reserved for offline cache
-  TAG_LIST:       "hb_tag_list",       // user-defined tag names (max 5)
+  THEME:            "hb_theme",
+  GUEST_DISMISSED:  "hb_guest_ok",
+  RECORD_CACHE:     "hb_record_cache",
+  TAG_LIST:         "hb_tag_list",
+  FIRST_VISIT:      "hb_first_visit",      // ISO date string, set once on first use
+  LOGIN_REMINDER:   "hb_login_reminder",   // "true" once reminder has been shown
 };
 
 // ─── Raw accessor (private) ───────────────────────────────────
@@ -81,3 +83,32 @@ export const getTagList = () => _get(KEYS.TAG_LIST, []);
  * @param {string[]} tags
  */
 export const saveTagList = (tags) => _set(KEYS.TAG_LIST, tags);
+
+// ─── First visit tracking ─────────────────────────────────────
+/**
+ * ensureFirstVisit — records today's date the very first time a guest
+ * opens the app. Subsequent calls are no-ops.
+ */
+export const ensureFirstVisit = () => {
+  if (!_get(KEYS.FIRST_VISIT)) {
+    _set(KEYS.FIRST_VISIT, new Date().toISOString().slice(0, 10));
+  }
+};
+
+/**
+ * daysSinceFirstVisit — how many calendar days since the first recorded visit.
+ * Returns 0 if first-visit date is not set yet.
+ */
+export const daysSinceFirstVisit = () => {
+  const d = _get(KEYS.FIRST_VISIT);
+  if (!d) return 0;
+  const msPerDay = 1000 * 60 * 60 * 24;
+  return Math.floor((Date.now() - new Date(d).getTime()) / msPerDay);
+};
+
+// ─── Login reminder ────────────────────────────────────────────
+/** Returns true if the one-time login reminder has already been shown. */
+export const getLoginReminderShown = () => _get(KEYS.LOGIN_REMINDER, false);
+
+/** Call this when the reminder is shown or dismissed, so it never appears again. */
+export const setLoginReminderShown  = () => _set(KEYS.LOGIN_REMINDER, true);

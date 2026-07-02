@@ -1,12 +1,1 @@
-{
-  "name": "HaiBack｜還袂",
-  "short_name": "還袂",
-  "description": "報銷與預支追蹤工具",
-  "start_url": "/",
-  "display": "standalone",
-  "background_color": "#09090b",
-  "theme_color": "#09090b",
-  "orientation": "portrait-primary",
-  "lang": "zh-TW",
-  "icons": []
-}
+{"name":"HaiBack｜還袂","short_name":"還袂","description":"報銷與預支追蹤工具","start_url":"/","display":"standalone","background_color":"#09090b","theme_color":"#09090b","orientation":"portrait-primary","lang":"zh-TW","icons":[]}
