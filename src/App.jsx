@@ -31,7 +31,7 @@ const sb = createClient(SUPABASE_URL, SUPABASE_ANON);
 // ── App version — bump this on every release ──────────────────
 // Used to auto-detect stale cached sessions and force a one-time
 // reload, so users never need to manually press Cmd/Ctrl+Shift+R.
-const APP_VERSION = "1.2.1";
+const APP_VERSION = "1.2.2";
 const VERSION_KEY  = "hb_app_version";
 // ─────────────────────────────────────────────────────────────
 
@@ -481,7 +481,8 @@ function AccountSheet({ user, records, dispatch, onLogout, onClose, d }) {
   const [newTag,  setNewTag]            = useState("");
   const [renamingTag, setRenamingTag]   = useState(null);
   const [renameInput, setRenameInput]   = useState("");
-  const [confirmTag,  setConfirmTag]    = useState(null); // tag pending deletion confirm
+  const [confirmTag,  setConfirmTag]    = useState(null);
+  const [showAbout,   setShowAbout]     = useState(false);
 
   const opts = [
     { k: "light",  l: "淺色模式", ic: I.sun   },
@@ -540,6 +541,54 @@ function AccountSheet({ user, records, dispatch, onLogout, onClose, d }) {
 
     setRenamingTag(null);
   };
+
+  // ── About page ──────────────────────────────────────────────
+  if (showAbout) {
+    const aboutRows = [
+      { icon: "💬", label: "回報問題／功能建議", sub: "告訴我哪裡可以更好" },
+      { icon: "☕", label: "支持 HaiBack",       sub: "請我喝杯咖啡" },
+      { icon: "📜", label: "更新日誌",            sub: `目前版本 v${APP_VERSION}` },
+    ];
+    return (
+      <Sheet title="關於" onClose={onClose} d={d}>
+        <div className="flex flex-col gap-8">
+          <button onClick={() => setShowAbout(false)}
+            className={`flex items-center gap-2 text-sm font-medium ${C.tx2(d)} hover:opacity-70 transition-opacity w-fit`}>
+            {I.back} 返回設定
+          </button>
+
+          <div className="flex flex-col items-center gap-3 py-4">
+            <div className={`w-16 h-16 rounded-3xl flex items-center justify-center shadow-sm ${d ? "bg-zinc-100" : "bg-zinc-900"}`}>
+              <span className={`font-bold text-2xl ${d ? "text-zinc-900" : "text-white"}`}>還</span>
+            </div>
+            <div className="flex flex-col items-center gap-1">
+              <div className={`text-lg font-bold ${C.tx(d)}`}>HaiBack｜還袂</div>
+              <p className={`text-sm text-center leading-relaxed ${C.tx3(d)}`}>
+                專為報銷設計，<br/>讓你不用再自己算公司還欠多少。
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-2">
+            {aboutRows.map(({ icon, label, sub }) => (
+              <div key={label} className={`flex items-center gap-4 px-4 py-4 rounded-2xl cursor-pointer hover:opacity-75 transition-opacity ${C.card(d)}`}>
+                <span className="text-xl w-7 text-center">{icon}</span>
+                <div className="flex-1">
+                  <div className={`text-sm font-semibold ${C.tx(d)}`}>{label}</div>
+                  <div className={`text-xs mt-0.5 ${C.tx3(d)}`}>{sub}</div>
+                </div>
+                <span className={C.tx3(d)}>{I.chevR}</span>
+              </div>
+            ))}
+          </div>
+
+          <p className={`text-center text-xs pb-2 ${d ? "text-zinc-600" : "text-zinc-400"}`}>
+            Designed &amp; Developed by CyM
+          </p>
+        </div>
+      </Sheet>
+    );
+  }
 
   if (editingTags) {
     return (
@@ -655,12 +704,12 @@ function AccountSheet({ user, records, dispatch, onLogout, onClose, d }) {
         </div>
         <div>
           <SecTitle d={d}>其他</SecTitle>
-          <SettingRow d={d} label="登出" danger onClick={() => { onLogout(); onClose(); }} />
+          <div className="flex flex-col gap-1">
+            <SettingRow d={d} icon={<span className="text-base">ℹ️</span>} label="關於" right={I.chevR}
+              onClick={() => setShowAbout(true)} />
+            <SettingRow d={d} label="登出" danger onClick={() => { onLogout(); onClose(); }} />
+          </div>
         </div>
-
-        <p className={`text-center text-xs pt-2 pb-1 ${d ? "text-zinc-600" : "text-zinc-400"}`}>
-          HaiBack｜還袂<br/>Version 1.2.1
-        </p>
       </div>
     </Sheet>
   );
