@@ -31,7 +31,7 @@ const sb = createClient(SUPABASE_URL, SUPABASE_ANON);
 // ── App version — bump this on every release ──────────────────
 // Used to auto-detect stale cached sessions and force a one-time
 // reload, so users never need to manually press Cmd/Ctrl+Shift+R.
-const APP_VERSION = "1.2.0";
+const APP_VERSION = "1.2.1";
 const VERSION_KEY  = "hb_app_version";
 // ─────────────────────────────────────────────────────────────
 
@@ -476,11 +476,12 @@ function Timeline({ rec, compact = false, d }) {
 // ─── Account Sheet ────────────────────────────────────────────
 function AccountSheet({ user, records, dispatch, onLogout, onClose, d }) {
   const { pref, setPref } = useTheme();
-  const [editingTags, setEditingTags] = useState(false);
-  const [tagList, setTagListState]    = useState(() => getTagList());
-  const [newTag,  setNewTag]          = useState("");
-  const [renamingTag, setRenamingTag] = useState(null); // tag name currently being renamed
-  const [renameInput, setRenameInput] = useState("");
+  const [editingTags, setEditingTags]   = useState(false);
+  const [tagList, setTagListState]      = useState(() => getTagList());
+  const [newTag,  setNewTag]            = useState("");
+  const [renamingTag, setRenamingTag]   = useState(null);
+  const [renameInput, setRenameInput]   = useState("");
+  const [confirmTag,  setConfirmTag]    = useState(null); // tag pending deletion confirm
 
   const opts = [
     { k: "light",  l: "淺色模式", ic: I.sun   },
@@ -498,12 +499,14 @@ function AccountSheet({ user, records, dispatch, onLogout, onClose, d }) {
     setNewTag("");
   };
 
-  const removeTag = (tag) => {
-    if (!confirm(`刪除標籤「${tag}」？\n已套用此標籤的紀錄不會被刪除，只會移除標籤。`)) return;
+  const removeTag = (tag) => { setConfirmTag(tag); };
+
+  const confirmRemoveTag = () => {
+    const tag = confirmTag;
+    setConfirmTag(null);
     const next = tagList.filter(t => t !== tag);
     setTagListState(next);
     saveTagList(next);
-    // Also remove this tag from any records that have it
     records.forEach(r => {
       if (r.tags && r.tags.includes(tag)) {
         dispatch({
@@ -597,6 +600,27 @@ function AccountSheet({ user, records, dispatch, onLogout, onClose, d }) {
               </div>
             </Field>
           )}
+
+          {/* Custom confirm dialog — replaces native confirm() */}
+          {confirmTag && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center px-6">
+              <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setConfirmTag(null)} />
+              <div className={`relative w-full max-w-xs rounded-3xl p-6 flex flex-col gap-4 shadow-2xl ${d ? "bg-zinc-900" : "bg-white"}`}>
+                <div className={`font-bold text-base ${C.tx(d)}`}>刪除標籤「{confirmTag}」？</div>
+                <p className={`text-sm ${C.tx2(d)} leading-relaxed`}>已套用此標籤的紀錄不會被刪除，只會移除標籤。</p>
+                <div className="flex gap-3">
+                  <button onClick={() => setConfirmTag(null)}
+                    className={`flex-1 py-3 rounded-2xl border text-sm font-semibold transition-all ${C.btnGhost(d)}`}>
+                    取消
+                  </button>
+                  <button onClick={confirmRemoveTag}
+                    className="flex-1 py-3 rounded-2xl bg-red-500 text-white text-sm font-bold hover:bg-red-600 transition-colors">
+                    刪除
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </Sheet>
     );
@@ -635,7 +659,7 @@ function AccountSheet({ user, records, dispatch, onLogout, onClose, d }) {
         </div>
 
         <p className={`text-center text-xs pt-2 pb-1 ${d ? "text-zinc-600" : "text-zinc-400"}`}>
-          HaiBack｜還袂<br/>Version 1.2.0
+          HaiBack｜還袂<br/>Version 1.2.1
         </p>
       </div>
     </Sheet>
