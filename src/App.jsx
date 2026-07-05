@@ -31,7 +31,7 @@ const sb = createClient(SUPABASE_URL, SUPABASE_ANON);
 // ── App version — bump this on every release ──────────────────
 // Used to auto-detect stale cached sessions and force a one-time
 // reload, so users never need to manually press Cmd/Ctrl+Shift+R.
-const APP_VERSION = "1.2.3";
+const APP_VERSION = "1.2.4";
 const VERSION_KEY  = "hb_app_version";
 // ─────────────────────────────────────────────────────────────
 
@@ -851,7 +851,7 @@ function AccountSheet({ user, records, dispatch, onLogout, onClose, d }) {
         <div>
           <SecTitle d={d}>其他</SecTitle>
           <div className="flex flex-col gap-1">
-            <SettingRow d={d} icon={<span className="text-base">ℹ️</span>} label="關於" right={I.chevR}
+            <SettingRow d={d} icon={I.info} label="關於" right={I.chevR}
               onClick={() => setShowAbout(true)} />
             <SettingRow d={d} label="登出" danger onClick={() => { onLogout(); onClose(); }} />
           </div>
