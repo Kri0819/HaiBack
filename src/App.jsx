@@ -31,7 +31,7 @@ const sb = createClient(SUPABASE_URL, SUPABASE_ANON);
 // ── App version — bump this on every release ──────────────────
 // Used to auto-detect stale cached sessions and force a one-time
 // reload, so users never need to manually press Cmd/Ctrl+Shift+R.
-const APP_VERSION = "1.2.2";
+const APP_VERSION = "1.2.3";
 const VERSION_KEY  = "hb_app_version";
 // ─────────────────────────────────────────────────────────────
 
@@ -473,6 +473,195 @@ function Timeline({ rec, compact = false, d }) {
   );
 }
 
+// ─── About Page ───────────────────────────────────────────────
+function AboutPage({ d, user, onBack, onClose }) {
+  const [panel, setPanel] = useState(null); // null | 'feedback' | 'support' | 'changelog'
+
+  // ── Feedback state ─────────────────────────────────────────
+  const [fbType,    setFbType]    = useState("bug");
+  const [fbTitle,   setFbTitle]   = useState("");
+  const [fbContent, setFbContent] = useState("");
+  const [fbEmail,   setFbEmail]   = useState("");
+  const [fbBusy,    setFbBusy]    = useState(false);
+  const [fbDone,    setFbDone]    = useState(false);
+
+  const resetFb = () => { setFbType("bug"); setFbTitle(""); setFbContent(""); setFbEmail(""); setFbDone(false); };
+
+  const submitFeedback = async () => {
+    if (!fbTitle.trim())   return alert("請填寫標題");
+    if (!fbContent.trim()) return alert("請填寫內容");
+    setFbBusy(true);
+    const { error } = await sb.from("hb_feedback").insert({
+      user_id:     user?.id ?? null,
+      is_guest:    !user,
+      app_name:    "HaiBack",
+      app_version: APP_VERSION,
+      platform:    navigator.userAgent,
+      type:        fbType,
+      title:       fbTitle.trim(),
+      content:     fbContent.trim(),
+      email:       fbEmail.trim(),
+    });
+    setFbBusy(false);
+    if (error) { alert("送出失敗，請稍後再試：\n" + error.message); return; }
+    setFbDone(true);
+  };
+
+  const typeOpts = [
+    { v: "bug",     l: "Bug 回報" },
+    { v: "feature", l: "功能建議" },
+    { v: "other",   l: "其他" },
+  ];
+
+  // ── Changelog ──────────────────────────────────────────────
+  if (panel === "changelog") {
+    return (
+      <Sheet title="更新日誌" onClose={onClose} d={d}>
+        <div className="flex flex-col gap-6">
+          <button onClick={() => setPanel(null)}
+            className={`flex items-center gap-2 text-sm font-medium ${C.tx2(d)} hover:opacity-70 transition-opacity w-fit`}>
+            {I.back} 返回關於
+          </button>
+          <div className="flex flex-col items-center gap-3 py-12">
+            <div className={`text-4xl`}>📜</div>
+            <p className={`text-sm ${C.tx3(d)}`}>更新日誌即將推出。</p>
+          </div>
+        </div>
+      </Sheet>
+    );
+  }
+
+  // ── Support ────────────────────────────────────────────────
+  if (panel === "support") {
+    return (
+      <Sheet title="支持 HaiBack" onClose={onClose} d={d}>
+        <div className="flex flex-col gap-6">
+          <button onClick={() => setPanel(null)}
+            className={`flex items-center gap-2 text-sm font-medium ${C.tx2(d)} hover:opacity-70 transition-opacity w-fit`}>
+            {I.back} 返回關於
+          </button>
+          <div className="flex flex-col items-center gap-5 py-4 text-center">
+            <span className="text-5xl">☕</span>
+            <div className={`font-bold text-lg ${C.tx(d)}`}>支持 HaiBack</div>
+            <p className={`text-sm leading-relaxed ${C.tx2(d)} max-w-xs`}>
+              HaiBack 將會永遠免費。<br/><br/>
+              如果它曾經幫助你更輕鬆管理報銷、少花一點時間對帳，<br/><br/>
+              歡迎請作者喝一杯咖啡 ☕<br/><br/>
+              你的每一份支持，都會成為 HaiBack 持續更新，以及下一個實用工具的動力。
+            </p>
+          </div>
+          <PBtn d={d} onClick={() => { /* TODO: replace with sponsor link */ }}>
+            小額贊助
+          </PBtn>
+          <GBtn d={d} onClick={() => setPanel(null)}>關閉</GBtn>
+        </div>
+      </Sheet>
+    );
+  }
+
+  // ── Feedback ───────────────────────────────────────────────
+  if (panel === "feedback") {
+    return (
+      <Sheet title="回報問題／功能建議" onClose={onClose} d={d}>
+        <div className="flex flex-col gap-5">
+          <button onClick={() => { setPanel(null); resetFb(); }}
+            className={`flex items-center gap-2 text-sm font-medium ${C.tx2(d)} hover:opacity-70 transition-opacity w-fit`}>
+            {I.back} 返回關於
+          </button>
+
+          {fbDone ? (
+            <div className="flex flex-col items-center gap-4 py-12 text-center">
+              <span className="text-5xl">❤️</span>
+              <div className={`font-bold text-lg ${C.tx(d)}`}>謝謝你的回饋 ❤️</div>
+              <p className={`text-sm ${C.tx2(d)}`}>你的意見已成功送出。</p>
+            </div>
+          ) : (
+            <>
+              <Field label="類型" d={d}>
+                <div className="flex gap-2">
+                  {typeOpts.map(({ v, l }) => (
+                    <button key={v} onClick={() => setFbType(v)}
+                      className={`flex-1 py-2.5 rounded-2xl border-2 text-xs font-semibold transition-all ${fbType === v ? C.activeFilter(d) : C.inactFilter(d)}`}>
+                      {l}
+                    </button>
+                  ))}
+                </div>
+              </Field>
+
+              <Field label="標題" d={d}>
+                <Input d={d} placeholder="一句話描述問題或建議" value={fbTitle}
+                  onChange={e => setFbTitle(e.target.value)} />
+              </Field>
+
+              <Field label="內容" d={d}>
+                <Textarea d={d} rows={4} placeholder="詳細描述…" value={fbContent}
+                  onChange={e => setFbContent(e.target.value)} />
+              </Field>
+
+              <Field label="Email（選填）" hint="方便我回覆你" d={d}>
+                <Input d={d} type="email" placeholder="you@example.com" value={fbEmail}
+                  onChange={e => setFbEmail(e.target.value)} />
+              </Field>
+
+              <PBtn d={d} onClick={submitFeedback} disabled={fbBusy}>
+                {fbBusy ? "送出中…" : "送出回饋"}
+              </PBtn>
+            </>
+          )}
+        </div>
+      </Sheet>
+    );
+  }
+
+  // ── About main ─────────────────────────────────────────────
+  const rows = [
+    { icon: "💬", label: "回報問題／功能建議", sub: "告訴我哪裡可以更好",       action: () => setPanel("feedback")  },
+    { icon: "☕", label: "支持 HaiBack",       sub: "請我喝杯咖啡",             action: () => setPanel("support")   },
+    { icon: "📜", label: "更新日誌",            sub: `目前版本 v${APP_VERSION}`, action: () => setPanel("changelog") },
+  ];
+
+  return (
+    <Sheet title="關於" onClose={onClose} d={d}>
+      <div className="flex flex-col gap-8">
+        <button onClick={onBack}
+          className={`flex items-center gap-2 text-sm font-medium ${C.tx2(d)} hover:opacity-70 transition-opacity w-fit`}>
+          {I.back} 返回設定
+        </button>
+
+        <div className="flex flex-col items-center gap-3 py-4">
+          <div className={`w-16 h-16 rounded-3xl flex items-center justify-center shadow-sm ${d ? "bg-zinc-100" : "bg-zinc-900"}`}>
+            <span className={`font-bold text-2xl ${d ? "text-zinc-900" : "text-white"}`}>還</span>
+          </div>
+          <div className="flex flex-col items-center gap-1">
+            <div className={`text-lg font-bold ${C.tx(d)}`}>HaiBack｜還袂</div>
+            <p className={`text-sm text-center leading-relaxed ${C.tx3(d)}`}>
+              專為報銷設計，<br/>讓你不用再自己算公司還欠多少。
+            </p>
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-2">
+          {rows.map(({ icon, label, sub, action }) => (
+            <div key={label} onClick={action}
+              className={`flex items-center gap-4 px-4 py-4 rounded-2xl cursor-pointer hover:opacity-75 transition-opacity ${C.card(d)}`}>
+              <span className="text-xl w-7 text-center">{icon}</span>
+              <div className="flex-1">
+                <div className={`text-sm font-semibold ${C.tx(d)}`}>{label}</div>
+                <div className={`text-xs mt-0.5 ${C.tx3(d)}`}>{sub}</div>
+              </div>
+              <span className={C.tx3(d)}>{I.chevR}</span>
+            </div>
+          ))}
+        </div>
+
+        <p className={`text-center text-xs pb-2 ${d ? "text-zinc-600" : "text-zinc-400"}`}>
+          Designed &amp; Developed by CyM
+        </p>
+      </div>
+    </Sheet>
+  );
+}
+
 // ─── Account Sheet ────────────────────────────────────────────
 function AccountSheet({ user, records, dispatch, onLogout, onClose, d }) {
   const { pref, setPref } = useTheme();
@@ -544,50 +733,7 @@ function AccountSheet({ user, records, dispatch, onLogout, onClose, d }) {
 
   // ── About page ──────────────────────────────────────────────
   if (showAbout) {
-    const aboutRows = [
-      { icon: "💬", label: "回報問題／功能建議", sub: "告訴我哪裡可以更好" },
-      { icon: "☕", label: "支持 HaiBack",       sub: "請我喝杯咖啡" },
-      { icon: "📜", label: "更新日誌",            sub: `目前版本 v${APP_VERSION}` },
-    ];
-    return (
-      <Sheet title="關於" onClose={onClose} d={d}>
-        <div className="flex flex-col gap-8">
-          <button onClick={() => setShowAbout(false)}
-            className={`flex items-center gap-2 text-sm font-medium ${C.tx2(d)} hover:opacity-70 transition-opacity w-fit`}>
-            {I.back} 返回設定
-          </button>
-
-          <div className="flex flex-col items-center gap-3 py-4">
-            <div className={`w-16 h-16 rounded-3xl flex items-center justify-center shadow-sm ${d ? "bg-zinc-100" : "bg-zinc-900"}`}>
-              <span className={`font-bold text-2xl ${d ? "text-zinc-900" : "text-white"}`}>還</span>
-            </div>
-            <div className="flex flex-col items-center gap-1">
-              <div className={`text-lg font-bold ${C.tx(d)}`}>HaiBack｜還袂</div>
-              <p className={`text-sm text-center leading-relaxed ${C.tx3(d)}`}>
-                專為報銷設計，<br/>讓你不用再自己算公司還欠多少。
-              </p>
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-2">
-            {aboutRows.map(({ icon, label, sub }) => (
-              <div key={label} className={`flex items-center gap-4 px-4 py-4 rounded-2xl cursor-pointer hover:opacity-75 transition-opacity ${C.card(d)}`}>
-                <span className="text-xl w-7 text-center">{icon}</span>
-                <div className="flex-1">
-                  <div className={`text-sm font-semibold ${C.tx(d)}`}>{label}</div>
-                  <div className={`text-xs mt-0.5 ${C.tx3(d)}`}>{sub}</div>
-                </div>
-                <span className={C.tx3(d)}>{I.chevR}</span>
-              </div>
-            ))}
-          </div>
-
-          <p className={`text-center text-xs pb-2 ${d ? "text-zinc-600" : "text-zinc-400"}`}>
-            Designed &amp; Developed by CyM
-          </p>
-        </div>
-      </Sheet>
-    );
+    return <AboutPage d={d} user={user} onBack={() => setShowAbout(false)} onClose={onClose} />;
   }
 
   if (editingTags) {
