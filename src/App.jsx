@@ -31,7 +31,7 @@ const sb = createClient(SUPABASE_URL, SUPABASE_ANON);
 // ── App version — bump this on every release ──────────────────
 // Used to auto-detect stale cached sessions and force a one-time
 // reload, so users never need to manually press Cmd/Ctrl+Shift+R.
-const APP_VERSION = "1.2.5";
+const APP_VERSION = "1.2.6";
 const VERSION_KEY  = "hb_app_version";
 // ─────────────────────────────────────────────────────────────
 
@@ -1873,14 +1873,36 @@ function MainApp() {
       return s;
     }, 0);
 
+    // ── 已追回總額規則 ──────────────────────────────────────────
+    // 只計算「已完成」紀錄中，實際從公司追回／收到的金額
+    // 1. 純報銷款完成 → 計入已入帳金額（r.paid）
+    // 2. 需結算款完成 + 公司欠我（!r.iOwe） → 計入公司補款（r.paid）
+    // 3. 需結算款完成 + 我欠公司（r.iOwe） → 不計入（那是我繳回公司，不是追回）
+    const recovered = filtered.reduce((s, r) => {
+      if (r.status !== "完成") return s;
+
+      if (r.effectiveKind === KIND.R) {
+        return s + r.paid;
+      }
+
+      if (r.kind === KIND.A && !r.iOwe) {
+        return s + r.paid;
+      }
+
+      // r.iOwe === true（我欠公司）→ 不計入
+      return s;
+    }, 0);
+
     return {
-      owed:    Math.max(owed, 0),
-      pending: filtered.filter(r => r.status !== "完成").length,
-      total:   filtered.length,
+      owed:      Math.max(owed, 0),
+      recovered: Math.max(recovered, 0),
+      pending:   filtered.filter(r => r.status !== "完成").length,
+      total:     filtered.length,
     };
   }, [filtered]);
 
-  const hasFilter = fStatus !== "處理中" || fKind !== "全部" || fTag !== "全部" || sort !== "date_desc";
+  const isDoneView = fStatus === "完成";
+  const hasFilter  = fStatus !== "處理中" || fKind !== "全部" || fTag !== "全部" || sort !== "date_desc";
   const quickRec  = quickId ? records.find(r => r.id === quickId) : null;
   const quickType = (() => {
     if (!quickRec) return null;
@@ -1971,12 +1993,12 @@ function MainApp() {
         <div className="px-4 pb-4">
           <div className="grid grid-cols-2 gap-3">
             <div className={`rounded-3xl px-4 py-4 ${d ? "bg-zinc-100 text-zinc-900" : "bg-zinc-900 text-white"}`}>
-              <div className={`text-xs font-medium uppercase tracking-wide mb-1 ${d ? "text-zinc-500" : "text-white/50"}`}>欠款總額</div>
-              <div className="text-2xl font-bold tracking-tight">{fmt(stats.owed)}</div>
+              <div className={`text-xs font-medium uppercase tracking-wide mb-1 ${d ? "text-zinc-500" : "text-white/50"}`}>{isDoneView ? "已追回總額" : "欠款總額"}</div>
+              <div className="text-2xl font-bold tracking-tight">{fmt(isDoneView ? stats.recovered : stats.owed)}</div>
             </div>
             <div className={`rounded-3xl px-4 py-4 ${C.card(d)}`}>
-              <div className={`text-xs font-medium uppercase tracking-wide ${C.tx3(d)} mb-1`}>待結算</div>
-              <div className={`text-2xl font-bold tracking-tight ${C.tx(d)}`}>{stats.pending}</div>
+              <div className={`text-xs font-medium uppercase tracking-wide ${C.tx3(d)} mb-1`}>{isDoneView ? "已完成" : "待結算"}</div>
+              <div className={`text-2xl font-bold tracking-tight ${C.tx(d)}`}>{isDoneView ? stats.total : stats.pending}</div>
               <div className={`text-xs ${C.tx3(d)} mt-1`}>共 {stats.total} 筆</div>
             </div>
           </div>
