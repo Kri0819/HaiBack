@@ -21,8 +21,9 @@ const KEYS = {
   GUEST_DISMISSED:  "hb_guest_ok",
   RECORD_CACHE:     "hb_record_cache",
   TAG_LIST:         "hb_tag_list",
-  FIRST_VISIT:      "hb_first_visit",      // ISO date string, set once on first use
-  LOGIN_REMINDER:   "hb_login_reminder",   // "true" once reminder has been shown
+  FIRST_VISIT:      "hb_first_visit",
+  LOGIN_REMINDER:   "hb_login_reminder",
+  FIRST_RECOVERY_PROMPT: "hb_first_recovery_prompt_shown",
 };
 
 // ─── Raw accessor (private) ───────────────────────────────────
@@ -112,3 +113,10 @@ export const getLoginReminderShown = () => _get(KEYS.LOGIN_REMINDER, false);
 
 /** Call this when the reminder is shown or dismissed, so it never appears again. */
 export const setLoginReminderShown  = () => _set(KEYS.LOGIN_REMINDER, true);
+
+// ─── First recovery prompt ─────────────────────────────────────
+/** Returns true if the "first recovery" celebration modal has already been shown. */
+export const getFirstRecoveryPromptShown = () => _get(KEYS.FIRST_RECOVERY_PROMPT, false);
+
+/** Call this once the modal is shown/dismissed, so it never appears again. */
+export const setFirstRecoveryPromptShown = () => _set(KEYS.FIRST_RECOVERY_PROMPT, true);

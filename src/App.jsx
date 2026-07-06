@@ -21,6 +21,7 @@ import {
   getTagList, saveTagList,
   ensureFirstVisit, daysSinceFirstVisit,
   getLoginReminderShown, setLoginReminderShown,
+  getFirstRecoveryPromptShown, setFirstRecoveryPromptShown,
 } from "./services/storage_v1.js";
 
 // ── PASTE YOUR SUPABASE CREDENTIALS HERE ─────────────────────
@@ -31,7 +32,7 @@ const sb = createClient(SUPABASE_URL, SUPABASE_ANON);
 // ── App version — bump this on every release ──────────────────
 // Used to auto-detect stale cached sessions and force a one-time
 // reload, so users never need to manually press Cmd/Ctrl+Shift+R.
-const APP_VERSION = "1.2.6";
+const APP_VERSION = "1.2.7";
 const VERSION_KEY  = "hb_app_version";
 // ─────────────────────────────────────────────────────────────
 
@@ -1683,6 +1684,40 @@ function LoginReminderModal({ onLogin, onDismiss, d }) {
   );
 }
 
+// ─── First Recovery Modal ──────────────────────────────────────
+function FirstRecoveryModal({ onViewDone, onDismiss, d }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center px-5">
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onDismiss} />
+
+      <div className={`relative w-full max-w-sm rounded-3xl shadow-2xl p-6 flex flex-col gap-4 ${d ? "bg-zinc-900" : "bg-white"}`}>
+        <button onClick={onDismiss}
+          className={`absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-full text-xl transition-colors ${d ? "bg-zinc-800 text-zinc-400 hover:bg-zinc-700" : "bg-zinc-100 text-zinc-500 hover:bg-zinc-200"}`}>
+          ×
+        </button>
+
+        <div className="flex flex-col gap-3 pr-6">
+          <div className={`text-lg font-bold ${C.tx(d)}`}>🎉 恭喜你追回第一筆款項</div>
+          <p className={`text-sm leading-relaxed ${C.tx2(d)}`}>
+            已完成的紀錄不會消失。<br/>
+            你可以在上方篩選切換至「完成」，<br/>
+            查看所有已追回的款項與歷史紀錄。
+          </p>
+        </div>
+
+        <button onClick={onViewDone}
+          className={`w-full py-4 rounded-2xl font-semibold text-sm active:scale-[0.98] transition-all ${d ? "bg-white text-zinc-900 hover:bg-zinc-100" : "bg-zinc-900 text-white hover:bg-zinc-800"}`}>
+          查看已完成
+        </button>
+        <button onClick={onDismiss}
+          className={`w-full py-3 rounded-2xl text-sm font-semibold transition-all ${C.tx2(d)} hover:opacity-70`}>
+          知道了
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function MainApp() {
   const { dark: d } = useTheme();
   const [records,    dispatchRecords] = useReducer(recordsReducer, []);
@@ -1700,6 +1735,8 @@ function MainApp() {
   const [guestOk,       setGuestOk]       = useState(() => getGuestDismissed());
   const [tagList,       setTagList]       = useState(() => getTagList());
   const [showLoginReminder, setShowLoginReminder] = useState(false);
+  const [pendingFirstRecovery, setPendingFirstRecovery] = useState(false);
+  const [showFirstRecoveryModal, setShowFirstRecoveryModal] = useState(false);
 
   // ── Auth: listen for session changes ──────────────────────
   useEffect(() => {
@@ -1738,6 +1775,27 @@ function MainApp() {
       setShowLoginReminder(true);
     }
   }, [records, user]);
+
+  // ── First recovery prompt display ──────────────────────────
+  // A transition (non-完成 → 完成) was detected in dispatch(), which set
+  // pendingFirstRecovery = true. We wait until the user is back at the
+  // home screen (selId === null, i.e. any detail-page/sheet is closed),
+  // then show the modal after a short delay so it never fights with
+  // a closing Sheet's own transition.
+  useEffect(() => {
+    if (!pendingFirstRecovery) return;
+    // Wait until fully back at the home screen — no detail page,
+    // no open Sheet, no quick-action Sheet — so this modal never
+    // fights with something the user is still interacting with.
+    if (selId !== null || sheet !== null || quickId !== null) return;
+
+    const timer = setTimeout(() => {
+      setShowFirstRecoveryModal(true);
+      setPendingFirstRecovery(false);
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [pendingFirstRecovery, selId, sheet, quickId]);
 
   // ── Load records + tags when user changes ─────────────────
   useEffect(() => {
@@ -1784,6 +1842,18 @@ function MainApp() {
 
   // ── dispatch — pure state update via reducer, side-effects here ──
   const dispatch = useCallback((action) => {
+    // ── First recovery detection ────────────────────────────
+    // Must happen BEFORE dispatchRecords, while `records` still
+    // holds the pre-update state, so we can compare old vs new status.
+    if (action.type === RECORDS_ACTION.UPDATE_RECORD && !getFirstRecoveryPromptShown()) {
+      const prev = records.find(r => r.id === action.payload.id);
+      const wasNotDone = prev && prev.status !== "完成";
+      const isNowDone  = action.payload.status === "完成";
+      if (wasNotDone && isNowDone) {
+        setPendingFirstRecovery(true);
+      }
+    }
+
     // Optimistic local update first
     dispatchRecords(action);
 
@@ -1811,7 +1881,7 @@ function MainApp() {
     } else if (action.type === RECORDS_ACTION.DELETE_RECORD) {
       db.delete(action.payload).catch(onSyncFail);
     }
-  }, [user]);
+  }, [user, records]);
 
   // ── Guest mode persistence: mirror records to localStorage on every change ──
   useEffect(() => {
@@ -2052,6 +2122,22 @@ function MainApp() {
             setLoginReminderShown();
             setShowLoginReminder(false);
             setSheet("login");
+          }}
+        />
+      )}
+
+      {/* First Recovery Modal */}
+      {showFirstRecoveryModal && (
+        <FirstRecoveryModal
+          d={d}
+          onDismiss={() => {
+            setFirstRecoveryPromptShown();
+            setShowFirstRecoveryModal(false);
+          }}
+          onViewDone={() => {
+            setFirstRecoveryPromptShown();
+            setShowFirstRecoveryModal(false);
+            setFStatus("完成");
           }}
         />
       )}
