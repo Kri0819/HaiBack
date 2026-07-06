@@ -31,7 +31,7 @@ const sb = createClient(SUPABASE_URL, SUPABASE_ANON);
 // ── App version — bump this on every release ──────────────────
 // Used to auto-detect stale cached sessions and force a one-time
 // reload, so users never need to manually press Cmd/Ctrl+Shift+R.
-const APP_VERSION = "1.2.4";
+const APP_VERSION = "1.2.5";
 const VERSION_KEY  = "hb_app_version";
 // ─────────────────────────────────────────────────────────────
 
@@ -171,7 +171,32 @@ const db = {
   },
 };
 
-// ── Row ↔ raw conversion ──────────────────────────────────────
+// ── User settings (tags, theme) — cloud for logged-in, localStorage for guests ──
+const userSettings = {
+  /**
+   * load — fetch tags from hb_user_settings.
+   * Returns null if no row exists yet (first login).
+   */
+  load: async () => {
+    const { data, error } = await sb
+      .from("hb_user_settings")
+      .select("tags")
+      .single();
+    if (error && error.code !== "PGRST116") throw new Error(error.message);
+    return data?.tags ?? null; // null = no row yet
+  },
+
+  /**
+   * saveTags — upsert tags into hb_user_settings.
+   * Creates the row on first call, updates on subsequent calls.
+   */
+  saveTags: async (tags) => {
+    const { error } = await sb
+      .from("hb_user_settings")
+      .upsert({ user_id: (await sb.auth.getUser()).data.user?.id, tags }, { onConflict: "user_id" });
+    if (error) throw new Error(error.message);
+  },
+};
 // user_id is intentionally omitted from rawToDbRow —
 // Supabase RLS uses auth.uid() server-side for insert/update.
 // Passing it from client is redundant and can cause mismatch if stale.
@@ -678,6 +703,12 @@ function AccountSheet({ user, records, dispatch, onLogout, onClose, d }) {
     { k: "dark",   l: "深色模式", ic: I.moon  },
   ];
 
+  // Save tags to localStorage always, and cloud if logged in
+  const syncTags = (next) => {
+    saveTagList(next);
+    if (user) userSettings.saveTags(next).catch(e => console.warn("tag sync failed:", e.message));
+  };
+
   const addTag = () => {
     const t = newTag.trim();
     if (!t) return;
@@ -685,7 +716,7 @@ function AccountSheet({ user, records, dispatch, onLogout, onClose, d }) {
     if (tagList.length >= MAX_TAGS) { alert(`最多只能建立 ${MAX_TAGS} 個標籤`); return; }
     const next = [...tagList, t];
     setTagListState(next);
-    saveTagList(next);
+    syncTags(next);
     setNewTag("");
   };
 
@@ -696,7 +727,7 @@ function AccountSheet({ user, records, dispatch, onLogout, onClose, d }) {
     setConfirmTag(null);
     const next = tagList.filter(t => t !== tag);
     setTagListState(next);
-    saveTagList(next);
+    syncTags(next);
     records.forEach(r => {
       if (r.tags && r.tags.includes(tag)) {
         dispatch({
@@ -716,7 +747,7 @@ function AccountSheet({ user, records, dispatch, onLogout, onClose, d }) {
 
     const next = tagList.map(t => t === renamingTag ? newName : t);
     setTagListState(next);
-    saveTagList(next);
+    syncTags(next);
 
     // Propagate the rename to every record that has the old tag name
     records.forEach(r => {
@@ -1708,31 +1739,47 @@ function MainApp() {
     }
   }, [records, user]);
 
-  // ── Load records when user changes ────────────────────────
+  // ── Load records + tags when user changes ─────────────────
   useEffect(() => {
     if (!user) {
-      // Guest mode: load from localStorage instead of Supabase
+      // Guest mode: load from localStorage
       const cached = loadRecords();
       dispatchRecords({
         type: RECORDS_ACTION.LOAD_RECORDS,
         payload: cached.map(derive),
       });
+      setTagList(getTagList()); // use local tag list for guests
       return;
     }
+
     setLoadingRec(true);
-    db.load()
-      .then((raws) => {
+
+    // Load records and tags in parallel
+    Promise.all([
+      db.load(),
+      userSettings.load(),
+    ])
+      .then(([raws, cloudTags]) => {
         dispatchRecords({
           type: RECORDS_ACTION.LOAD_RECORDS,
           payload: raws.map(derive),
         });
+
+        if (cloudTags !== null) {
+          // Cloud has tags — use them, sync to localStorage as cache
+          setTagList(cloudTags);
+          saveTagList(cloudTags);
+        } else {
+          // No cloud tags yet — migrate from localStorage if any exist
+          const localTags = getTagList();
+          if (localTags.length > 0) {
+            userSettings.saveTags(localTags).catch(e => console.warn("tag migration failed:", e.message));
+          }
+          setTagList(localTags);
+        }
       })
-      .catch((e) => {
-        console.warn("載入失敗:", e.message);
-      })
-      .finally(() => {
-        setLoadingRec(false);
-      });
+      .catch((e) => { console.warn("載入失敗:", e.message); })
+      .finally(() => { setLoadingRec(false); });
   }, [user?.id]);
 
   // ── dispatch — pure state update via reducer, side-effects here ──
