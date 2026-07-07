@@ -32,7 +32,7 @@ const sb = createClient(SUPABASE_URL, SUPABASE_ANON);
 // ── App version — bump this on every release ──────────────────
 // Used to auto-detect stale cached sessions and force a one-time
 // reload, so users never need to manually press Cmd/Ctrl+Shift+R.
-const APP_VERSION = "1.2.7";
+const APP_VERSION = "1.2.8";
 const VERSION_KEY  = "hb_app_version";
 // ─────────────────────────────────────────────────────────────
 
@@ -951,12 +951,14 @@ function LoginSheet({ onClose, d }) {
 
 // ─── Tag Picker ───────────────────────────────────────────────
 // Lets the user pick from up to 5 self-defined tags, or create new ones
-// inline (capped at 5 total). Tag *names* are a personal UI preference
-// stored locally (storage_v1.getTagList/saveTagList) — not financial
-// data, so they don't need cloud sync.
+// inline (capped at 5 total).
+//
+// Tag names are a personal UI preference. They are cached in
+// localStorage and synced to hb_user_settings for logged-in users
+// (see userSettings.saveTags in the db layer above).
 const MAX_TAGS = 5;
 
-function TagPicker({ selected, onChange, d }) {
+function TagPicker({ selected, onChange, d, user }) {
   const [allTags, setAllTags] = useState(() => getTagList());
   const [adding, setAdding]   = useState(false);
   const [newTag, setNewTag]   = useState("");
@@ -976,6 +978,9 @@ function TagPicker({ selected, onChange, d }) {
     const next = [...allTags, t];
     setAllTags(next);
     saveTagList(next);
+    // Sync to cloud immediately for logged-in users — not just when
+    // editing tags from the settings page.
+    if (user) userSettings.saveTags(next).catch(e => console.warn("tag sync failed:", e.message));
     onChange([...selected, t]);
     setNewTag("");
     setAdding(false);
@@ -1152,7 +1157,7 @@ function RecordSheet({ initial, onSave, onClose, user, d }) {
               </>
             )}
 
-            <TagPicker d={d} selected={form.tags} onChange={tags => set("tags", tags)} />
+            <TagPicker d={d} user={user} selected={form.tags} onChange={tags => set("tags", tags)} />
 
             <Field label="備註" d={d}>
               <Textarea d={d} rows={2} placeholder="選填"
@@ -1845,12 +1850,27 @@ function MainApp() {
     // ── First recovery detection ────────────────────────────
     // Must happen BEFORE dispatchRecords, while `records` still
     // holds the pre-update state, so we can compare old vs new status.
+    //
+    // Only trigger when money was ACTUALLY recovered, not just any
+    // completion:
+    //   1. 純報銷款完成，且 paid > 0
+    //   2. 需結算款完成，公司欠我（iOwe !== true），且 paid > 0
+    // Does NOT trigger for:
+    //   - 我欠公司並完成繳回（iOwe === true）
+    //   - 沒有追回金額的完成紀錄（paid === 0）
     if (action.type === RECORDS_ACTION.UPDATE_RECORD && !getFirstRecoveryPromptShown()) {
       const prev = records.find(r => r.id === action.payload.id);
       const wasNotDone = prev && prev.status !== "完成";
       const isNowDone  = action.payload.status === "完成";
+
       if (wasNotDone && isNowDone) {
-        setPendingFirstRecovery(true);
+        const p = action.payload;
+        const isReimburseRecovery = p.effectiveKind === KIND.R && p.paid > 0;
+        const isAdvanceRecovery   = p.kind === KIND.A && p.iOwe !== true && p.paid > 0;
+
+        if (isReimburseRecovery || isAdvanceRecovery) {
+          setPendingFirstRecovery(true);
+        }
       }
     }
 
@@ -2089,12 +2109,6 @@ function MainApp() {
           {loadingRec ? (
             <div className="text-center py-24">
               <div className={`text-sm ${C.tx3(d)}`}>載入資料中…</div>
-            </div>
-          ) : filtered.length === 0 ? (
-            <div className="text-center py-24">
-              <div className="text-5xl mb-4">📋</div>
-              <div className={`text-sm font-semibold ${C.tx2(d)} mb-1`}>{search || hasFilter ? "沒有符合的紀錄" : "記帳不是麻煩，只是還沒被整理好。"}</div>
-              {!search && !hasFilter && <p className={`text-xs ${C.tx3(d)}`}>點右下角 + 開始記帳</p>}
             </div>
           ) : filtered.length === 0 ? (
             <div className="text-center py-24">
