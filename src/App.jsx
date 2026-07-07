@@ -32,7 +32,7 @@ const sb = createClient(SUPABASE_URL, SUPABASE_ANON);
 // ── App version — bump this on every release ──────────────────
 // Used to auto-detect stale cached sessions and force a one-time
 // reload, so users never need to manually press Cmd/Ctrl+Shift+R.
-const APP_VERSION = "1.2.9";
+const APP_VERSION = "1.3.0";
 const VERSION_KEY  = "hb_app_version";
 // ─────────────────────────────────────────────────────────────
 
@@ -703,6 +703,101 @@ function AboutPage({ d, user, onBack, onClose }) {
   );
 }
 
+// ─── Export Data Page ─────────────────────────────────────────
+function ExportDataPage({ d, records, onBack, onClose }) {
+  const isEmpty = records.length === 0;
+  const todayStr = today(); // YYYY-MM-DD, from domain/records.js
+
+  const exportJson = () => {
+    const payload = {
+      app: "HaiBack",
+      version: APP_VERSION,
+      exportedAt: new Date().toISOString(),
+      records: records.map(strip),
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement("a");
+    a.href     = url;
+    a.download = `haiback-backup-${todayStr}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // Escape a single CSV field: wrap in quotes if it contains a comma,
+  // newline, or double-quote; double any internal quotes.
+  const csvEscape = (val) => {
+    const s = String(val ?? "");
+    if (/[",\n]/.test(s)) {
+      return `"${s.replace(/"/g, '""')}"`;
+    }
+    return s;
+  };
+
+  const exportCsv = () => {
+    const headers = ["狀態","類型","名稱","日期","金額","預支金額","實際花費","已入帳/已處理","剩餘金額","結算日期","標籤","備註"];
+    const rows = records.map(r => [
+      r.status ?? "",
+      r.kind === KIND.R ? "純報銷" : "需結算",
+      r.title ?? "",
+      r.date ?? "",
+      toN(r.amount),
+      toN(r.advanceReceived),
+      toN(r.actualSpent),
+      toN(r.paid),
+      toN(r.remaining),
+      r.settlementDate ?? "",
+      (r.tags || []).join("、"),
+      r.note ?? "",
+    ]);
+
+    const csvBody = [headers, ...rows]
+      .map(row => row.map(csvEscape).join(","))
+      .join("\n");
+
+    // UTF-8 BOM so Excel/Google Sheets render Chinese characters correctly
+    const blob = new Blob(["\uFEFF" + csvBody], { type: "text/csv;charset=utf-8;" });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement("a");
+    a.href     = url;
+    a.download = `haiback-records-${todayStr}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  return (
+    <Sheet title="匯出資料" onClose={onClose} d={d}>
+      <div className="flex flex-col gap-6">
+        <button onClick={onBack}
+          className={`flex items-center gap-2 text-sm font-medium ${C.tx2(d)} hover:opacity-70 transition-opacity w-fit`}>
+          {I.back} 返回設定
+        </button>
+
+        <p className={`text-sm leading-relaxed ${C.tx2(d)}`}>
+          你可以匯出目前所有 HaiBack 紀錄，<br/>
+          作為個人備份或整理使用。<br/><br/>
+          JSON 適合完整備份，<br/>
+          CSV 適合用 Excel 或試算表查看。
+        </p>
+
+        {isEmpty && (
+          <div className={`rounded-2xl px-4 py-4 text-center text-sm ${C.card2(d)} ${C.tx3(d)}`}>
+            目前還沒有可以匯出的紀錄。
+          </div>
+        )}
+
+        <PBtn d={d} onClick={exportJson} disabled={isEmpty}>
+          匯出 JSON 備份
+        </PBtn>
+        <PBtn d={d} onClick={exportCsv} disabled={isEmpty}>
+          匯出 CSV 表格
+        </PBtn>
+        <GBtn d={d} onClick={onBack}>返回設定</GBtn>
+      </div>
+    </Sheet>
+  );
+}
+
 // ─── Account Sheet ────────────────────────────────────────────
 function AccountSheet({ user, records, dispatch, onLogout, onClose, d }) {
   const { pref, setPref } = useTheme();
@@ -713,6 +808,7 @@ function AccountSheet({ user, records, dispatch, onLogout, onClose, d }) {
   const [renameInput, setRenameInput]   = useState("");
   const [confirmTag,  setConfirmTag]    = useState(null);
   const [showAbout,   setShowAbout]     = useState(false);
+  const [showExport,  setShowExport]    = useState(false);
 
   const opts = [
     { k: "light",  l: "淺色模式", ic: I.sun   },
@@ -777,6 +873,11 @@ function AccountSheet({ user, records, dispatch, onLogout, onClose, d }) {
 
     setRenamingTag(null);
   };
+
+  // ── Export data page ─────────────────────────────────────────
+  if (showExport) {
+    return <ExportDataPage d={d} records={records} onBack={() => setShowExport(false)} onClose={onClose} />;
+  }
 
   // ── About page ──────────────────────────────────────────────
   if (showAbout) {
@@ -894,6 +995,11 @@ function AccountSheet({ user, records, dispatch, onLogout, onClose, d }) {
           <SecTitle d={d}>標籤</SecTitle>
           <SettingRow d={d} label="編輯標籤" value={`${tagList.length} 個`} right={I.chevR}
             onClick={() => setEditingTags(true)} />
+        </div>
+        <div>
+          <SecTitle d={d}>資料與備份</SecTitle>
+          <SettingRow d={d} label="匯出資料" value="JSON / CSV" right={I.chevR}
+            onClick={() => setShowExport(true)} />
         </div>
         <div>
           <SecTitle d={d}>其他</SecTitle>
