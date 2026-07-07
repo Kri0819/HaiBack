@@ -32,7 +32,7 @@ const sb = createClient(SUPABASE_URL, SUPABASE_ANON);
 // ── App version — bump this on every release ──────────────────
 // Used to auto-detect stale cached sessions and force a one-time
 // reload, so users never need to manually press Cmd/Ctrl+Shift+R.
-const APP_VERSION = "1.2.8";
+const APP_VERSION = "1.2.9";
 const VERSION_KEY  = "hb_app_version";
 // ─────────────────────────────────────────────────────────────
 
@@ -514,12 +514,13 @@ function AboutPage({ d, user, onBack, onClose }) {
   const resetFb = () => { setFbType("bug"); setFbTitle(""); setFbContent(""); setFbEmail(""); setFbDone(false); };
 
   const submitFeedback = async () => {
+    if (!user) return alert("請先登入後再送出回饋。");
     if (!fbTitle.trim())   return alert("請填寫標題");
     if (!fbContent.trim()) return alert("請填寫內容");
     setFbBusy(true);
     const { error } = await sb.from("hb_feedback").insert({
-      user_id:     user?.id ?? null,
-      is_guest:    !user,
+      user_id:     user.id,
+      is_guest:    false,
       app_name:    "HaiBack",
       app_version: APP_VERSION,
       platform:    navigator.userAgent,
@@ -540,6 +541,14 @@ function AboutPage({ d, user, onBack, onClose }) {
   ];
 
   // ── Changelog ──────────────────────────────────────────────
+  const changelogEntries = [
+    { v: "1.2.9", note: "整理關於頁、支持頁與回饋流程。" },
+    { v: "1.2.8", note: "修正第一次追回款項提示條件，並整理標籤同步與空狀態顯示。" },
+    { v: "1.2.7", note: "新增第一次追回款項提示。" },
+    { v: "1.2.6", note: "完成頁改為顯示已追回總額。" },
+    { v: "1.2.5", note: "標籤支援雲端同步。" },
+  ];
+
   if (panel === "changelog") {
     return (
       <Sheet title="更新日誌" onClose={onClose} d={d}>
@@ -548,9 +557,13 @@ function AboutPage({ d, user, onBack, onClose }) {
             className={`flex items-center gap-2 text-sm font-medium ${C.tx2(d)} hover:opacity-70 transition-opacity w-fit`}>
             {I.back} 返回關於
           </button>
-          <div className="flex flex-col items-center gap-3 py-12">
-            <div className={`text-4xl`}>📜</div>
-            <p className={`text-sm ${C.tx3(d)}`}>更新日誌即將推出。</p>
+          <div className="flex flex-col gap-3">
+            {changelogEntries.map(({ v, note }) => (
+              <div key={v} className={`rounded-2xl px-4 py-4 ${C.card(d)}`}>
+                <div className={`text-sm font-bold ${C.tx(d)} mb-1`}>v{v}</div>
+                <p className={`text-sm leading-relaxed ${C.tx2(d)}`}>{note}</p>
+              </div>
+            ))}
           </div>
         </div>
       </Sheet>
@@ -567,17 +580,19 @@ function AboutPage({ d, user, onBack, onClose }) {
             {I.back} 返回關於
           </button>
           <div className="flex flex-col items-center gap-5 py-4 text-center">
-            <span className="text-5xl">☕</span>
+            <span className="text-5xl">🧋</span>
             <div className={`font-bold text-lg ${C.tx(d)}`}>支持 HaiBack</div>
             <p className={`text-sm leading-relaxed ${C.tx2(d)} max-w-xs`}>
-              HaiBack 將會永遠免費。<br/><br/>
-              如果它曾經幫助你更輕鬆管理報銷、少花一點時間對帳，<br/><br/>
-              歡迎請作者喝一杯咖啡 ☕<br/><br/>
-              你的每一份支持，都會成為 HaiBack 持續更新，以及下一個實用工具的動力。
+              HaiBack 會持續保持免費。<br/><br/>
+              如果它曾經幫你少算一點帳、<br/>
+              少忘一筆報銷，<br/>
+              歡迎之後請作者喝杯奶茶 🧋<br/><br/>
+              你的支持，會成為 HaiBack 持續更新，<br/>
+              以及下一個實用小工具誕生的動力。
             </p>
           </div>
-          <PBtn d={d} onClick={() => { /* TODO: replace with sponsor link */ }}>
-            小額贊助
+          <PBtn d={d} disabled>
+            奶茶基金準備中
           </PBtn>
           <GBtn d={d} onClick={() => setPanel(null)}>關閉</GBtn>
         </div>
@@ -642,7 +657,7 @@ function AboutPage({ d, user, onBack, onClose }) {
   // ── About main ─────────────────────────────────────────────
   const rows = [
     { icon: "💬", label: "回報問題／功能建議", sub: "告訴我哪裡可以更好",       action: () => setPanel("feedback")  },
-    { icon: "☕", label: "支持 HaiBack",       sub: "請我喝杯咖啡",             action: () => setPanel("support")   },
+    { icon: "🧋", label: "支持 HaiBack",       sub: "請作者喝杯奶茶",           action: () => setPanel("support")   },
     { icon: "📜", label: "更新日誌",            sub: `目前版本 v${APP_VERSION}`, action: () => setPanel("changelog") },
   ];
 
@@ -661,7 +676,7 @@ function AboutPage({ d, user, onBack, onClose }) {
           <div className="flex flex-col items-center gap-1">
             <div className={`text-lg font-bold ${C.tx(d)}`}>HaiBack｜還袂</div>
             <p className={`text-sm text-center leading-relaxed ${C.tx3(d)}`}>
-              專為報銷設計，<br/>讓你不用再自己算公司還欠多少。
+              專為報銷與公司代墊設計。<br/>讓你不用再自己算公司還欠多少。
             </p>
           </div>
         </div>
@@ -680,7 +695,7 @@ function AboutPage({ d, user, onBack, onClose }) {
           ))}
         </div>
 
-        <p className={`text-center text-xs pb-2 ${d ? "text-zinc-600" : "text-zinc-400"}`}>
+        <p className={`text-center text-xs pt-6 pb-4 ${d ? "text-zinc-600" : "text-zinc-400"}`}>
           Designed &amp; Developed by CyM
         </p>
       </div>
