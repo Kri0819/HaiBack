@@ -32,7 +32,7 @@ const sb = createClient(SUPABASE_URL, SUPABASE_ANON);
 // ── App version — bump this on every release ──────────────────
 // Used to auto-detect stale cached sessions and force a one-time
 // reload, so users never need to manually press Cmd/Ctrl+Shift+R.
-const APP_VERSION = "1.3.4";
+const APP_VERSION = "1.3.5";
 const VERSION_KEY  = "hb_app_version";
 // ─────────────────────────────────────────────────────────────
 
@@ -542,6 +542,7 @@ function AboutPage({ d, user, onBack, onClose }) {
 
   // ── Changelog ──────────────────────────────────────────────
   const changelogEntries = [
+    { v: "1.3.5", note: "設定頁 footer 新增使用條款、隱私權政策與聯絡作者入口。" },
     { v: "1.3.4", note: "設定頁重新分區，顯示改為藥丸切換，標籤與匯出資料合併為資料管理。" },
     { v: "1.3.3", note: "更新日誌改為緊湊列表樣式，移除多餘的重複返回按鈕。" },
     { v: "1.3.2", note: "調整更新日誌卡片間距，設定主頁補回版本號顯示。" },
@@ -805,6 +806,23 @@ function ExportDataPage({ d, records, onBack, onClose }) {
   );
 }
 
+// ─── Legal Text Sheet (shared by terms / privacy / contact) ────
+function LegalTextSheet({ d, title, onBack, onClose, children }) {
+  return (
+    <Sheet title={title} onClose={onClose} d={d}>
+      <div className="flex flex-col gap-5">
+        <button onClick={onBack}
+          className={`flex items-center gap-2 text-sm font-medium ${C.tx2(d)} hover:opacity-70 transition-opacity w-fit`}>
+          {I.back} 返回設定
+        </button>
+        <div className={`flex flex-col gap-3 text-sm leading-relaxed ${C.tx2(d)}`}>
+          {children}
+        </div>
+      </div>
+    </Sheet>
+  );
+}
+
 // ─── Account Sheet ────────────────────────────────────────────
 function AccountSheet({ user, records, dispatch, onLogout, onClose, d }) {
   const { pref, setPref } = useTheme();
@@ -816,6 +834,7 @@ function AccountSheet({ user, records, dispatch, onLogout, onClose, d }) {
   const [confirmTag,  setConfirmTag]    = useState(null);
   const [showAbout,   setShowAbout]     = useState(false);
   const [showExport,  setShowExport]    = useState(false);
+  const [legalPanel,  setLegalPanel]    = useState(null); // null | "terms" | "privacy" | "contact"
 
   const opts = [
     { k: "light",  l: "淺色模式", ic: I.sun   },
@@ -889,6 +908,71 @@ function AccountSheet({ user, records, dispatch, onLogout, onClose, d }) {
   // ── About page ──────────────────────────────────────────────
   if (showAbout) {
     return <AboutPage d={d} user={user} onBack={() => setShowAbout(false)} onClose={onClose} />;
+  }
+
+  // ── Legal panels (terms / privacy / contact) ──────────────────
+  if (legalPanel === "terms") {
+    return (
+      <LegalTextSheet d={d} title="使用條款" onClose={onClose} onBack={() => setLegalPanel(null)}>
+        <p>HaiBack｜還袂 是一個協助使用者紀錄公司代墊款、報銷進度與結算狀態的小工具。</p>
+        <p>使用 HaiBack 時，代表你理解並同意：</p>
+        <ol className="list-decimal pl-5 flex flex-col gap-2">
+          <li>HaiBack 僅提供紀錄、整理與提醒用途，不構成正式會計、法律或稅務建議。</li>
+          <li>使用者需自行確認輸入資料的正確性，包含金額、日期、款項狀態與備註內容。</li>
+          <li>HaiBack 會盡力維持服務穩定，但不保證服務永不中斷或資料永不遺失。</li>
+          <li>使用者可自行透過「匯出資料」功能備份紀錄。</li>
+          <li>若因使用者輸入錯誤、裝置問題、網路異常或第三方服務異常造成資料不一致，HaiBack 不負擔因此產生的帳務或金錢責任。</li>
+          <li>HaiBack 目前為免費工具，未來若有重大功能、收費方式或條款變更，將於更新日誌或相關頁面中說明。</li>
+        </ol>
+        <p className={C.tx3(d)}>最後更新：2026 年 7 月</p>
+      </LegalTextSheet>
+    );
+  }
+
+  if (legalPanel === "privacy") {
+    return (
+      <LegalTextSheet d={d} title="隱私權政策" onClose={onClose} onBack={() => setLegalPanel(null)}>
+        <p>HaiBack｜還袂 重視你的資料與隱私。</p>
+        <p>當你使用 HaiBack 時，可能會儲存以下資料：</p>
+        <ol className="list-decimal pl-5 flex flex-col gap-2">
+          <li>Google 登入資訊：包含你的帳號識別資訊、顯示名稱或 Email，用於登入與雲端同步。</li>
+          <li>報銷與代墊紀錄：包含款項名稱、日期、金額、預支金額、實際花費、入帳紀錄、標籤與備註。</li>
+          <li>使用者設定：包含標籤列表、外觀偏好與部分本機提示狀態。</li>
+          <li>回饋內容：當你送出問題回報或功能建議時，HaiBack 會儲存你填寫的標題、內容、類型與選填 Email。</li>
+        </ol>
+        <p>這些資料僅用於：</p>
+        <ul className="list-disc pl-5 flex flex-col gap-1">
+          <li>提供紀錄與雲端同步功能</li>
+          <li>顯示與整理你的報銷資料</li>
+          <li>匯出個人備份</li>
+          <li>處理使用者回饋</li>
+          <li>改善 HaiBack 的功能與穩定性</li>
+        </ul>
+        <p>HaiBack 不會主動販售、出租或公開你的個人資料。</p>
+        <p>資料儲存於 Supabase 提供的雲端資料庫中，並透過 Row Level Security 限制使用者僅能讀取與管理自己的紀錄。</p>
+        <p>你可以透過「匯出資料」功能自行備份紀錄。如需刪除帳號或相關資料，可透過「聯絡作者」與 CyM 聯繫。</p>
+        <p className={C.tx3(d)}>最後更新：2026 年 7 月</p>
+      </LegalTextSheet>
+    );
+  }
+
+  if (legalPanel === "contact") {
+    return (
+      <LegalTextSheet d={d} title="聯絡作者" onClose={onClose} onBack={() => setLegalPanel(null)}>
+        <p>HaiBack｜還袂 由 CyM 設計與開發。</p>
+        <p>如果你有以下需求，歡迎聯絡我：</p>
+        <ul className="list-disc pl-5 flex flex-col gap-1">
+          <li>回報無法正常使用的問題</li>
+          <li>提供功能建議</li>
+          <li>詢問資料刪除或隱私相關事項</li>
+          <li>其他合作或聯絡需求</li>
+        </ul>
+        <p className="mt-2">
+          <span className={`block text-xs font-semibold uppercase tracking-wider ${C.tx3(d)} mb-1`}>Email</span>
+          請填入作者信箱
+        </p>
+      </LegalTextSheet>
+    );
   }
 
   if (editingTags) {
@@ -1029,7 +1113,13 @@ function AccountSheet({ user, records, dispatch, onLogout, onClose, d }) {
         <div className={`text-center text-xs pt-2 pb-4 ${d ? "text-zinc-600" : "text-zinc-400"}`}>
           <p>HaiBack｜還袂</p>
           <p>Version {APP_VERSION}</p>
-          <p className="mt-1">使用條款 · 隱私權政策 · 聯絡作者</p>
+          <p className="mt-1 flex items-center justify-center gap-1.5">
+            <button onClick={() => setLegalPanel("terms")} className="hover:opacity-70 active:opacity-50 transition-opacity">使用條款</button>
+            <span>·</span>
+            <button onClick={() => setLegalPanel("privacy")} className="hover:opacity-70 active:opacity-50 transition-opacity">隱私權政策</button>
+            <span>·</span>
+            <button onClick={() => setLegalPanel("contact")} className="hover:opacity-70 active:opacity-50 transition-opacity">聯絡作者</button>
+          </p>
         </div>
       </div>
     </Sheet>
