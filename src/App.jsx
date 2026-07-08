@@ -32,7 +32,7 @@ const sb = createClient(SUPABASE_URL, SUPABASE_ANON);
 // ── App version — bump this on every release ──────────────────
 // Used to auto-detect stale cached sessions and force a one-time
 // reload, so users never need to manually press Cmd/Ctrl+Shift+R.
-const APP_VERSION = "1.3.2";
+const APP_VERSION = "1.3.3";
 const VERSION_KEY  = "hb_app_version";
 // ─────────────────────────────────────────────────────────────
 
@@ -542,6 +542,7 @@ function AboutPage({ d, user, onBack, onClose }) {
 
   // ── Changelog ──────────────────────────────────────────────
   const changelogEntries = [
+    { v: "1.3.3", note: "更新日誌改為緊湊列表樣式，移除多餘的重複返回按鈕。" },
     { v: "1.3.2", note: "調整更新日誌卡片間距，設定主頁補回版本號顯示。" },
     { v: "1.3.1", note: "整理匯出資料細節與更新日誌。" },
     { v: "1.3.0", note: "新增資料與備份區，可匯出 JSON 備份與 CSV 表格。" },
@@ -560,11 +561,11 @@ function AboutPage({ d, user, onBack, onClose }) {
             className={`flex items-center gap-2 text-sm font-medium ${C.tx2(d)} hover:opacity-70 transition-opacity w-fit`}>
             {I.back} 返回關於
           </button>
-          <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-1">
             {changelogEntries.map(({ v, note }) => (
-              <div key={v} className={`rounded-2xl px-4 py-5 ${C.card(d)}`}>
-                <div className={`text-sm font-bold ${C.tx(d)} mb-1.5`}>v{v}</div>
-                <p className={`text-sm leading-relaxed ${C.tx2(d)}`}>{note}</p>
+              <div key={v} className={`px-4 py-3.5 rounded-2xl ${C.card(d)}`}>
+                <div className={`text-sm font-semibold ${C.tx(d)}`}>v{v}</div>
+                <p className={`text-xs mt-0.5 ${C.tx3(d)}`}>{note}</p>
               </div>
             ))}
           </div>
@@ -597,7 +598,6 @@ function AboutPage({ d, user, onBack, onClose }) {
           <PBtn d={d} disabled>
             奶茶基金準備中
           </PBtn>
-          <GBtn d={d} onClick={() => setPanel(null)}>關閉</GBtn>
         </div>
       </Sheet>
     );
@@ -799,7 +799,6 @@ function ExportDataPage({ d, records, onBack, onClose }) {
         <PBtn d={d} onClick={exportCsv} disabled={isEmpty}>
           匯出 CSV 表格
         </PBtn>
-        <GBtn d={d} onClick={onBack}>返回設定</GBtn>
       </div>
     </Sheet>
   );
