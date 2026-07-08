@@ -32,7 +32,7 @@ const sb = createClient(SUPABASE_URL, SUPABASE_ANON);
 // ── App version — bump this on every release ──────────────────
 // Used to auto-detect stale cached sessions and force a one-time
 // reload, so users never need to manually press Cmd/Ctrl+Shift+R.
-const APP_VERSION = "1.3.3";
+const APP_VERSION = "1.3.4";
 const VERSION_KEY  = "hb_app_version";
 // ─────────────────────────────────────────────────────────────
 
@@ -542,6 +542,7 @@ function AboutPage({ d, user, onBack, onClose }) {
 
   // ── Changelog ──────────────────────────────────────────────
   const changelogEntries = [
+    { v: "1.3.4", note: "設定頁重新分區，顯示改為藥丸切換，標籤與匯出資料合併為資料管理。" },
     { v: "1.3.3", note: "更新日誌改為緊湊列表樣式，移除多餘的重複返回按鈕。" },
     { v: "1.3.2", note: "調整更新日誌卡片間距，設定主頁補回版本號顯示。" },
     { v: "1.3.1", note: "整理匯出資料細節與更新日誌。" },
@@ -987,26 +988,35 @@ function AccountSheet({ user, records, dispatch, onLogout, onClose, d }) {
             label={auth.displayName(user)} value="雲端帳號"
           />
         </div>
+
         <div>
-          <SecTitle d={d}>外觀</SecTitle>
-          <div className="flex flex-col gap-1">
-            {opts.map(({ k, l, ic }) => (
-              <SettingRow key={k} d={d} icon={ic} label={l}
-                right={pref === k ? <span className={`text-xs font-bold ${C.tx(d)}`}>✓</span> : I.chevR}
-                onClick={() => setPref(k)} />
-            ))}
+          <SecTitle d={d}>顯示</SecTitle>
+          <div className={`flex p-1 rounded-2xl gap-1 ${C.card(d)}`}>
+            {opts.map(({ k, l, ic }) => {
+              const active = pref === k;
+              return (
+                <button key={k} onClick={() => setPref(k)}
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-sm font-semibold transition-all ${
+                    active ? C.activeFilter(d) : `${C.tx2(d)} hover:opacity-70`
+                  }`}>
+                  {ic}
+                  {l}
+                </button>
+              );
+            })}
           </div>
         </div>
+
         <div>
-          <SecTitle d={d}>標籤</SecTitle>
-          <SettingRow d={d} label="編輯標籤" value={`${tagList.length} 個`} right={I.chevR}
-            onClick={() => setEditingTags(true)} />
+          <SecTitle d={d}>資料管理</SecTitle>
+          <div className="flex flex-col gap-1">
+            <SettingRow d={d} label="編輯標籤" value={`${tagList.length} 個`} right={I.chevR}
+              onClick={() => setEditingTags(true)} />
+            <SettingRow d={d} label="匯出資料" value="JSON / CSV" right={I.chevR}
+              onClick={() => setShowExport(true)} />
+          </div>
         </div>
-        <div>
-          <SecTitle d={d}>資料與備份</SecTitle>
-          <SettingRow d={d} label="匯出資料" value="JSON / CSV" right={I.chevR}
-            onClick={() => setShowExport(true)} />
-        </div>
+
         <div>
           <SecTitle d={d}>其他</SecTitle>
           <div className="flex flex-col gap-1">
@@ -1016,9 +1026,11 @@ function AccountSheet({ user, records, dispatch, onLogout, onClose, d }) {
           </div>
         </div>
 
-        <p className={`text-center text-xs pt-2 pb-1 ${d ? "text-zinc-600" : "text-zinc-400"}`}>
-          HaiBack｜還袂<br/>Version {APP_VERSION}
-        </p>
+        <div className={`text-center text-xs pt-2 pb-4 ${d ? "text-zinc-600" : "text-zinc-400"}`}>
+          <p>HaiBack｜還袂</p>
+          <p>Version {APP_VERSION}</p>
+          <p className="mt-1">使用條款 · 隱私權政策 · 聯絡作者</p>
+        </div>
       </div>
     </Sheet>
   );
