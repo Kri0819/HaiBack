@@ -32,7 +32,7 @@ const sb = createClient(SUPABASE_URL, SUPABASE_ANON);
 // ── App version — bump this on every release ──────────────────
 // Used to auto-detect stale cached sessions and force a one-time
 // reload, so users never need to manually press Cmd/Ctrl+Shift+R.
-const APP_VERSION = "1.3.0";
+const APP_VERSION = "1.3.1";
 const VERSION_KEY  = "hb_app_version";
 // ─────────────────────────────────────────────────────────────
 
@@ -542,6 +542,8 @@ function AboutPage({ d, user, onBack, onClose }) {
 
   // ── Changelog ──────────────────────────────────────────────
   const changelogEntries = [
+    { v: "1.3.1", note: "整理匯出資料細節與更新日誌。" },
+    { v: "1.3.0", note: "新增資料與備份區，可匯出 JSON 備份與 CSV 表格。" },
     { v: "1.2.9", note: "整理關於頁、支持頁與回饋流程。" },
     { v: "1.2.8", note: "修正第一次追回款項提示條件，並整理標籤同步與空狀態顯示。" },
     { v: "1.2.7", note: "新增第一次追回款項提示。" },
@@ -720,7 +722,9 @@ function ExportDataPage({ d, records, onBack, onClose }) {
     const a    = document.createElement("a");
     a.href     = url;
     a.download = `haiback-backup-${todayStr}.json`;
+    document.body.appendChild(a);
     a.click();
+    document.body.removeChild(a);
     URL.revokeObjectURL(url);
   };
 
@@ -761,7 +765,9 @@ function ExportDataPage({ d, records, onBack, onClose }) {
     const a    = document.createElement("a");
     a.href     = url;
     a.download = `haiback-records-${todayStr}.csv`;
+    document.body.appendChild(a);
     a.click();
+    document.body.removeChild(a);
     URL.revokeObjectURL(url);
   };
 
