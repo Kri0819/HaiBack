@@ -32,7 +32,7 @@ const sb = createClient(SUPABASE_URL, SUPABASE_ANON);
 // ── App version — bump this on every release ──────────────────
 // Used to auto-detect stale cached sessions and force a one-time
 // reload, so users never need to manually press Cmd/Ctrl+Shift+R.
-const APP_VERSION = "1.3.1";
+const APP_VERSION = "1.3.2";
 const VERSION_KEY  = "hb_app_version";
 // ─────────────────────────────────────────────────────────────
 
@@ -542,6 +542,7 @@ function AboutPage({ d, user, onBack, onClose }) {
 
   // ── Changelog ──────────────────────────────────────────────
   const changelogEntries = [
+    { v: "1.3.2", note: "調整更新日誌卡片間距，設定主頁補回版本號顯示。" },
     { v: "1.3.1", note: "整理匯出資料細節與更新日誌。" },
     { v: "1.3.0", note: "新增資料與備份區，可匯出 JSON 備份與 CSV 表格。" },
     { v: "1.2.9", note: "整理關於頁、支持頁與回饋流程。" },
@@ -559,10 +560,10 @@ function AboutPage({ d, user, onBack, onClose }) {
             className={`flex items-center gap-2 text-sm font-medium ${C.tx2(d)} hover:opacity-70 transition-opacity w-fit`}>
             {I.back} 返回關於
           </button>
-          <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-4">
             {changelogEntries.map(({ v, note }) => (
-              <div key={v} className={`rounded-2xl px-4 py-4 ${C.card(d)}`}>
-                <div className={`text-sm font-bold ${C.tx(d)} mb-1`}>v{v}</div>
+              <div key={v} className={`rounded-2xl px-4 py-5 ${C.card(d)}`}>
+                <div className={`text-sm font-bold ${C.tx(d)} mb-1.5`}>v{v}</div>
                 <p className={`text-sm leading-relaxed ${C.tx2(d)}`}>{note}</p>
               </div>
             ))}
@@ -1015,6 +1016,10 @@ function AccountSheet({ user, records, dispatch, onLogout, onClose, d }) {
             <SettingRow d={d} label="登出" danger onClick={() => { onLogout(); onClose(); }} />
           </div>
         </div>
+
+        <p className={`text-center text-xs pt-2 pb-1 ${d ? "text-zinc-600" : "text-zinc-400"}`}>
+          HaiBack｜還袂<br/>Version {APP_VERSION}
+        </p>
       </div>
     </Sheet>
   );
